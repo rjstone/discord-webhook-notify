@@ -1,0 +1,22 @@
+name: Test Action
+on: [ push ]
+jobs:
+  windows_test:
+    runs-on: windows-latest
+    name: Windows Test Job
+    steps:
+    - name: Test Info
+      uses: rjstone/discord-webhook-notify@v1
+        with:
+          severity: info
+          message: Test succeeded.
+    - name: Test Warn
+      uses: rjstone/discord-webhook-notify@v1
+        with:
+          severity: warn
+          message: Test warning.
+    - name: Test Error
+      uses: rjstone/discord-webhook-notify@v1
+        with:
+          severity: error
+          message: Test error.
