@@ -11,10 +11,18 @@ inputs:
     description: Severity level - info, warn, error
     required: false
     default: error
-  message:
-    description: Notification message. Use context expressions and environment variables to provide information.
+  description:
+    description: Embed notification message. Use context expressions and environment variables to provide information. Default provides branch and user info.
     required: false
-    default: Sent by discord-webhook-notify.
+  details:
+    description: Additional text after the notification message in case you want to retain the default message.
+    required: false
+  footer:
+    description: Footer for the embed. Defaults to severity.
+    required: false
+  text:
+    description: Text to be sent as normal text above the embed. Use context expressions and environment variables to provide information.
+    required: false
   username:
     description: Username to display in discord.
     required: false

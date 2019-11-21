@@ -9,17 +9,28 @@ jobs:
       uses: rjstone/discord-webhook-notify@v1
       with:
         severity: info
-        message: Test succeeded.
+        details: Test succeeded.
         webhookUrl: ${{ secrets.DISCORD_WEBHOOK }}
     - name: Test Warn
       uses: rjstone/discord-webhook-notify@v1
       with:
         severity: warn
-        message: Test warning.
+        details: Test warning.
         webhookUrl: ${{ secrets.DISCORD_WEBHOOK }}
     - name: Test Error
       uses: rjstone/discord-webhook-notify@v1
       with:
         severity: error
-        message: Test error.
+        details: Test error.
+        webhookUrl: ${{ secrets.DISCORD_WEBHOOK }}
+    - name: Test Custom
+      uses: rjstone/discord-webhook-notify@v1
+      with:
+        severity: info
+        user: CustomUsername
+        color: #2255ff
+        avatarUrl: https://github.githubassets.com/images/modules/logos_page/Octocat.png
+        description: This is a custom description.
+        footer: This is a footer.
+        text: This is where text goes.
         webhookUrl: ${{ secrets.DISCORD_WEBHOOK }}

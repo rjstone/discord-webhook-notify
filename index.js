@@ -15,31 +15,45 @@ async function run() {
     try {
         const webhookUrl = core.getInput('webhookUrl').replace("/github", "");
         const severity = core.getInput('severity');
-        const message = core.getInput('message');
+        const description = core.getInput('description');
+        const details = core.getInput('details');
+        const footer = core.getInput('footer');
+        const text = core.getInput('text');
         const username = core.getInput('username');
         const color = core.getInput('color');
         const avatarUrl = core.getInput('avatarUrl');
         
         const context = github.context;
-        const payload = JSON.stringify(context, undefined, 2)
-        core.info(`The event github.context: ${payload}`);
+        const payload = context.payload;
+        const obstr = JSON.stringify(context, undefined, 2)
+        core.info(`The event github.context: ${obstr}`);
 
-        core.info(`Sending: ${message}`);
+        if (!description) {
+            description = `- **Repo:** ${payload.repository.full_name}\n`
+                        + `- **Ref:** ${payload.ref}\n`
+                        + `- **Workflow:** ${payload.workflow}\n`
+                        + `- **Author:** ${payload.head_commit.author.name}\n`
+                        + `- **Committer:** ${payload.head_commit.committer.name}\m`
+                        + `- **Pusher:** ${payload.pusher.name}\n`
+                        + `- **Commit URL:** ${payload.head_commit.url}\n`
+                        ;
+        }
 
         const hook = new webhook.Webhook(webhookUrl);
 
         const msg = new webhook.MessageBuilder()
                         .setName(username || default_username)
+                        .setAvatar(avatarUrl || default_avatarUrl)
                         .setColor(color || default_colors[severity])
-                        .addField("Severity", severity)
-                        .setText(message)
-                        .setImage(avatarUrl || default_avatarUrl)
+                        .setDescription(description + "\n" + details)
+                        .setFooter(footer || severity)
+                        .setText(text)
                         .setTime();
 
         hook.send(msg);
 
     } catch (error) {
-    core.setFailed(error.message);
+        core.setFailed(error.message);
     }
 }
 
