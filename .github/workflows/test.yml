@@ -10,13 +10,16 @@ jobs:
       with:
         severity: info
         message: Test succeeded.
+        webhookUrl: ${{ secrets.DISCORD_WEBHOOK }}
     - name: Test Warn
       uses: rjstone/discord-webhook-notify@v1
       with:
         severity: warn
         message: Test warning.
+        webhookUrl: ${{ secrets.DISCORD_WEBHOOK }}
     - name: Test Error
       uses: rjstone/discord-webhook-notify@v1
       with:
         severity: error
         message: Test error.
+        webhookUrl: ${{ secrets.DISCORD_WEBHOOK }}
