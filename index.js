@@ -21,12 +21,13 @@ async function run() {
         const avatarUrl = core.getInput('avatarUrl');
         
         const context = github.context;
+        const secrets = github.secrets;
         const payload = JSON.stringify(context, undefined, 2)
         core.info(`The event github.context: ${payload}`);
 
         core.info(`Sending: ${message}`);
 
-        const hook = new webhook.Webhook(webhookUrl);
+        const hook = new webhook.Webhook(webhookUrl || secrets.DISCORD_WEBHOOK.replace("/github", ""));
 
         const msg = new webhook.MessageBuilder()
                         .setName(username || default_username)

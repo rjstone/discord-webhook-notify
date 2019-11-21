@@ -7,7 +7,6 @@ inputs:
   webhookUrl:
     description: Discord webhook URL. Should be stored in a secret and inserted as a context expression.
     required: false
-    default: ${{ secrets.DISCORD_WEBHOOK }}
   severity:
     description: Severity level - info, warn, error
     required: false
