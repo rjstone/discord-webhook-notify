@@ -7,16 +7,16 @@ jobs:
     steps:
     - name: Test Info
       uses: rjstone/discord-webhook-notify@v1
-        with:
-          severity: info
-          message: Test succeeded.
+      with:
+        severity: info
+        message: Test succeeded.
     - name: Test Warn
       uses: rjstone/discord-webhook-notify@v1
-        with:
-          severity: warn
-          message: Test warning.
+      with:
+        severity: warn
+        message: Test warning.
     - name: Test Error
       uses: rjstone/discord-webhook-notify@v1
-        with:
-          severity: error
-          message: Test error.
+      with:
+        severity: error
+        message: Test error.
