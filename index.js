@@ -21,7 +21,7 @@ async function run() {
         const avatarUrl = core.getInput('avatarUrl');
         
         const context = github.context;
-        const secrets = github.secrets;
+        const secrets = core.secrets;
         const payload = JSON.stringify(context, undefined, 2)
         core.info(`The event github.context: ${payload}`);
 
