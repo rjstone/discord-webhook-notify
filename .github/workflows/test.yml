@@ -5,25 +5,25 @@ jobs:
     runs-on: windows-latest
     name: Windows Test Job
     steps:
-    - name: Test Info
+    - name: Windows Test Info
       uses: rjstone/discord-webhook-notify@v1
       with:
         severity: info
         details: Test succeeded.
         webhookUrl: ${{ secrets.DISCORD_WEBHOOK }}
-    - name: Test Warn
+    - name: Windows Test Warn
       uses: rjstone/discord-webhook-notify@v1
       with:
         severity: warn
         details: Test warning.
         webhookUrl: ${{ secrets.DISCORD_WEBHOOK }}
-    - name: Test Error
+    - name: Windows Test Error
       uses: rjstone/discord-webhook-notify@v1
       with:
         severity: error
         details: Test error.
         webhookUrl: ${{ secrets.DISCORD_WEBHOOK }}
-    - name: Test Custom
+    - name: Windows Test Custom
       uses: rjstone/discord-webhook-notify@v1
       with:
         severity: info
@@ -35,28 +35,28 @@ jobs:
         footer: This is a footer.
         text: This is where text goes.
         webhookUrl: ${{ secrets.DISCORD_WEBHOOK }}
-    - name: Test Success
+    - name: Windows Test Success
       uses: rjstone/discord-webhook-notify@v1
       if: success()
       with:
         severity: info
         webhookUrl: ${{ secrets.DISCORD_WEBHOOK }}
-    - name: Test Failure
+    - name: Windows Test Failure
       uses: rjstone/discord-webhook-notify@v1
       if: failure()
       with:
         severity: error
         webhookUrl: ${{ secrets.DISCORD_WEBHOOK }}
-    - name: Test Cancelled
+    - name: Windows Test Cancelled
       uses: rjstone/discord-webhook-notify@v1
       if: cancelled()
       with:
         severity: warn
         webhookUrl: ${{ secrets.DISCORD_WEBHOOK }}
-    - name: Test No Webhook
+    - name: Windows Test No Webhook
       uses: rjstone/discord-webhook-notify@v1
   linux_test:
-    runs-on: linux-latest
+    runs-on: ubuntu-latest
     name: Linux Test Job
     steps:
     - name: Linux Test Info
@@ -65,3 +65,47 @@ jobs:
         severity: info
         details: Test succeeded.
         webhookUrl: ${{ secrets.DISCORD_WEBHOOK }}
+    - name: Linux Test Warn
+      uses: rjstone/discord-webhook-notify@v1
+      with:
+        severity: warn
+        details: Test warning.
+        webhookUrl: ${{ secrets.DISCORD_WEBHOOK }}
+    - name: Linux Test Error
+      uses: rjstone/discord-webhook-notify@v1
+      with:
+        severity: error
+        details: Test error.
+        webhookUrl: ${{ secrets.DISCORD_WEBHOOK }}
+    - name: Linux Test Custom
+      uses: rjstone/discord-webhook-notify@v1
+      with:
+        severity: info
+        username: CustomUsername
+        color: '#ff00aa'
+        avatarUrl: https://github.githubassets.com/images/modules/logos_page/Octocat.png
+        description: This is a custom description.
+        details: 'Custom details: Somebody set up us the bomb.'
+        footer: This is a footer.
+        text: This is where text goes.
+        webhookUrl: ${{ secrets.DISCORD_WEBHOOK }}
+    - name: Linux Test Success
+      uses: rjstone/discord-webhook-notify@v1
+      if: success()
+      with:
+        severity: info
+        webhookUrl: ${{ secrets.DISCORD_WEBHOOK }}
+    - name: Linux Test Failure
+      uses: rjstone/discord-webhook-notify@v1
+      if: failure()
+      with:
+        severity: error
+        webhookUrl: ${{ secrets.DISCORD_WEBHOOK }}
+    - name: Linux Test Cancelled
+      uses: rjstone/discord-webhook-notify@v1
+      if: cancelled()
+      with:
+        severity: warn
+        webhookUrl: ${{ secrets.DISCORD_WEBHOOK }}
+    - name: Linux Test No Webhook
+      uses: rjstone/discord-webhook-notify@v1
