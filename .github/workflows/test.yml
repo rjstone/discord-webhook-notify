@@ -28,10 +28,26 @@ jobs:
       with:
         severity: info
         username: CustomUsername
-        color: '#2255ff'
+        color: '#00aaff'
         avatarUrl: https://github.githubassets.com/images/modules/logos_page/Octocat.png
         description: This is a custom description.
-        details: Somebody set up us the bomb (details).
+        details: 'Custom details: Somebody set up us the bomb.'
         footer: This is a footer.
         text: This is where text goes.
         webhookUrl: ${{ secrets.DISCORD_WEBHOOK }}
+    - name: Test Success
+      on: success()
+      uses: rjstone/discord-webhook-notify@v1
+      with:
+        severity: info
+    - name: Test Failure
+      on: failure()
+      uses: rjstone/discord-webhook-notify@v1
+      with:
+        severity: error
+    - name: Test Cancelled
+      on: cancelled()
+      with:
+        severity: warn
+
+
