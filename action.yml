@@ -1,8 +1,8 @@
 name: Discord Webhook Notify
 author: rjstone@radix.cc
 description: >
-  JavaScript action to send notifications to Discord using a webhook.
-  Compatible with all execution environments including windows, mac, and linux.
+  Send notifications to Discord using a webhook.
+  Works with all execution environments including windows, macos, and linux.
 inputs:
   webhookUrl:
     description: Discord webhook URL. Should be stored in a secret and inserted as a context expression.
