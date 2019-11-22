@@ -19,6 +19,11 @@ const long_severity = {
 async function run() {
     try {
         const webhookUrl = core.getInput('webhookUrl').replace("/github", "");
+        if (!webhookUrl) {
+            core.setFailed("Error: webhookUrl was not provided. For security reasons the secret URL must be provided "
+                           + "in the action yaml using a context expression and can not be read as a default.");
+            return;
+        }
         const severity = core.getInput('severity');
         const description = core.getInput('description');
         const details = core.getInput('details');
@@ -45,7 +50,7 @@ async function run() {
         const hook = new webhook.Webhook(webhookUrl);
 
         core.info(`${username} ${avatarUrl} ${color} ${description} ${details} ${footer} ${text}`)
-        
+
         const msg = new webhook.MessageBuilder()
                         .setName(username || default_username)
                         .setAvatar(avatarUrl || default_avatarUrl)
