@@ -30,7 +30,7 @@ async function run() {
 
         default_description = `- **Repo:** ${payload.repository.full_name}\n`
                         + `- **Ref:** ${payload.ref}\n`
-                        + `- **Workflow:** ${payload.workflow}\n`
+                        + `- **Workflow:** ${context.workflow}\n`
                         + `- **Author:** ${payload.head_commit.author.name}\n`
                         + `- **Committer:** ${payload.head_commit.committer.name}\n`
                         + `- **Pusher:** ${payload.pusher.name}\n`
