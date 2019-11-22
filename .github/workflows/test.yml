@@ -27,10 +27,11 @@ jobs:
       uses: rjstone/discord-webhook-notify@v1
       with:
         severity: info
-        user: CustomUsername
-        color: #2255ff
+        username: CustomUsername
+        color: \#2255ff
         avatarUrl: https://github.githubassets.com/images/modules/logos_page/Octocat.png
         description: This is a custom description.
+        details: Somebody set up us the bomb (details).
         footer: This is a footer.
         text: This is where text goes.
         webhookUrl: ${{ secrets.DISCORD_WEBHOOK }}

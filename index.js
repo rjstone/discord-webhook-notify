@@ -32,7 +32,7 @@ async function run() {
                         + `- **Ref:** ${payload.ref}\n`
                         + `- **Workflow:** ${payload.workflow}\n`
                         + `- **Author:** ${payload.head_commit.author.name}\n`
-                        + `- **Committer:** ${payload.head_commit.committer.name}\m`
+                        + `- **Committer:** ${payload.head_commit.committer.name}\n`
                         + `- **Pusher:** ${payload.pusher.name}\n`
                         + `- **Commit URL:** ${payload.head_commit.url}\n`
                         ;
