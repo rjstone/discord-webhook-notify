@@ -36,16 +36,17 @@ jobs:
         text: This is where text goes.
         webhookUrl: ${{ secrets.DISCORD_WEBHOOK }}
     - name: Test Success
-      on: success()
       uses: rjstone/discord-webhook-notify@v1
+      on: success()
       with:
         severity: info
     - name: Test Failure
-      on: failure()
       uses: rjstone/discord-webhook-notify@v1
+      on: failure()
       with:
         severity: error
     - name: Test Cancelled
+      uses: rjstone/discord-webhook-notify@v1
       on: cancelled()
       with:
         severity: warn
