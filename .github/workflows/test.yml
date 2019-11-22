@@ -55,5 +55,13 @@ jobs:
         webhookUrl: ${{ secrets.DISCORD_WEBHOOK }}
     - name: Test No Webhook
       uses: rjstone/discord-webhook-notify@v1
-
-
+  linux_test:
+    runs-on: linux-latest
+    name: Linux Test Job
+    steps:
+    - name: Linux Test Info
+      uses: rjstone/discord-webhook-notify@v1
+      with:
+        severity: info
+        details: Test succeeded.
+        webhookUrl: ${{ secrets.DISCORD_WEBHOOK }}

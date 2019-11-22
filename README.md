@@ -1,6 +1,6 @@
 # Discord Webhook Notify
 
-This sends a notification to discord using a webhook URL. It is written in JavaScript so it will work with both windows and linux execution environments.
+This sends a notification to discord using a webhook URL. It is written in JavaScript so **it will work with both windows and linux execution environments**.
 
 To use this, get on Discord and create a new webhook. Then get on GitHub, go into your project settings, and add a new Secret called `DISCORD_WEBHOOK`. In your workflow YAML, set `webhookUrl` as follows: `webhookUrl: ${{ secrets.DISCORD_WEBHOOK }}`. You must set webhookUrl this way for each invocation of the action.
 
@@ -81,6 +81,8 @@ Set up notification for whatever conditions you want. There's no built-in handli
 
 This shows the appearance of notifications where most of the inputs are left at the default.
 
+![Default Appearance Screenshot](img/default_appearance.jpg)
+
 ```
 - name: Test Info
     uses: rjstone/discord-webhook-notify@v1
@@ -105,6 +107,8 @@ This shows the appearance of notifications where most of the inputs are left at 
 ### Minimal Full Custom Example
 
 This shows you where each custom input shows up in the formatting of the Discord notification.
+
+![Custom Appearance Example](img/custom_appearance.jpg)
 
 ```
 - name: Test Custom
