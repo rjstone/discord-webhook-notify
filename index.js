@@ -28,8 +28,7 @@ async function run() {
         const obstr = JSON.stringify(context, undefined, 2)
         core.info(`The event github.context: ${obstr}`);
 
-        if (!description) {
-            description = `- **Repo:** ${payload.repository.full_name}\n`
+        default_description = `- **Repo:** ${payload.repository.full_name}\n`
                         + `- **Ref:** ${payload.ref}\n`
                         + `- **Workflow:** ${payload.workflow}\n`
                         + `- **Author:** ${payload.head_commit.author.name}\n`
@@ -37,7 +36,6 @@ async function run() {
                         + `- **Pusher:** ${payload.pusher.name}\n`
                         + `- **Commit URL:** ${payload.head_commit.url}\n`
                         ;
-        }
 
         const hook = new webhook.Webhook(webhookUrl);
 
@@ -45,7 +43,7 @@ async function run() {
                         .setName(username || default_username)
                         .setAvatar(avatarUrl || default_avatarUrl)
                         .setColor(color || default_colors[severity])
-                        .setDescription(description + "\n" + details)
+                        .setDescription((description || default_description) + "\n" + details)
                         .setFooter(footer || severity)
                         .setText(text)
                         .setTime();
