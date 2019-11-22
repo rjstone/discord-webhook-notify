@@ -20,7 +20,7 @@ async function run() {
     try {
         const webhookUrl = core.getInput('webhookUrl').replace("/github", "");
         if (!webhookUrl) {
-            core.setFailed("Error: webhookUrl was not provided. For security reasons the secret URL must be provided "
+            core.setFailed("The webhookUrl was not provided. For security reasons the secret URL must be provided "
                            + "in the action yaml using a context expression and can not be read as a default.");
             return;
         }

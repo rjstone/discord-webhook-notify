@@ -26,7 +26,6 @@ inputs:
   username:
     description: Username to display in discord.
     required: false
-    default: GitHub
   color:
     description: Notification color in the form poundsign rrggbb (hex). Default determined by severity.
     required: false
