@@ -28,7 +28,7 @@ jobs:
       with:
         severity: info
         username: CustomUsername
-        color: \#2255ff
+        color: '#2255ff'
         avatarUrl: https://github.githubassets.com/images/modules/logos_page/Octocat.png
         description: This is a custom description.
         details: Somebody set up us the bomb (details).

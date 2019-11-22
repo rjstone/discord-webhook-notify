@@ -31,7 +31,7 @@ async function run() {
         const context = github.context;
         const payload = context.payload;
         const obstr = JSON.stringify(context, undefined, 2)
-        core.info(`The event github.context: ${obstr}`);
+        core.debug(`The event github.context: ${obstr}`);
 
         default_description = `- **Repo:** ${payload.repository.full_name}\n`
                         + `- **Ref:** ${payload.ref}\n`
@@ -44,12 +44,14 @@ async function run() {
 
         const hook = new webhook.Webhook(webhookUrl);
 
+        core.info(`${username} ${avatarUrl} ${color} ${description} ${details} ${footer} ${text}`)
+        
         const msg = new webhook.MessageBuilder()
                         .setName(username || default_username)
                         .setAvatar(avatarUrl || default_avatarUrl)
                         .setColor(color || default_colors[severity])
                         .setDescription((description || default_description) + "\n" + details)
-                        .setFooter(footer || "Severity: " + long_severity[severity])
+                        .setFooter(footer || ("Severity: " + long_severity[severity]))
                         .setText(text)
                         .setTime();
 
