@@ -10,6 +10,11 @@ const default_colors = {
     warn: '#ff9900',
     error: '#ff0000'
 }
+const long_severity = {
+    info: "Informational",
+    warn: "Warning",
+    error: "Error"
+}
 
 async function run() {
     try {
@@ -44,7 +49,7 @@ async function run() {
                         .setAvatar(avatarUrl || default_avatarUrl)
                         .setColor(color || default_colors[severity])
                         .setDescription((description || default_description) + "\n" + details)
-                        .setFooter(footer || severity)
+                        .setFooter(footer || "Severity: " + long_severity[severity])
                         .setText(text)
                         .setTime();
 
