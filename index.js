@@ -45,7 +45,7 @@ async function run() {
                         + `- **Committer:** ${payload.head_commit.committer.name}\n`
                         + `- **Pusher:** ${payload.pusher.name}\n`
                         + `- **Commit URL:** ${payload.head_commit.url}\n`
-                        + `- **Commit Message: ${payload.head_commit.message}\n`
+                        + `- **Commit Message:** ${payload.head_commit.message}\n`
                         ;
 
         const hook = new webhook.Webhook(webhookUrl);
