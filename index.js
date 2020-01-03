@@ -16,6 +16,27 @@ const long_severity = {
     error: "Error"
 }
 
+async function getDefaultDescription() {
+    const context = github.context;
+    const payload = context.payload;
+
+    switch(github.context.eventName) {
+    case 'push':
+        return `- **Event: ${context.eventName}\n`
+            + `- **Repo:** ${payload.repository.full_name}\n`
+            + `- **Ref:** ${payload.ref}\n`
+            + `- **Workflow:** ${context.workflow}\n`
+            + `- **Author:** ${payload.head_commit.author.name}\n`
+            + `- **Committer:** ${payload.head_commit.committer.name}\n`
+            + `- **Pusher:** ${payload.pusher.name}\n`
+            + `- **Commit URL:** ${payload.head_commit.url}\n`
+            + `- **Commit Message:** ${payload.head_commit.message}\n`
+            ;
+    default:
+        return `**Event:** ${context.eventName}`;
+    }
+}
+
 async function run() {
     try {
         const webhookUrl = core.getInput('webhookUrl').replace("/github", "");
@@ -34,19 +55,8 @@ async function run() {
         const avatarUrl = core.getInput('avatarUrl');
         
         const context = github.context;
-        const payload = context.payload;
         const obstr = JSON.stringify(context, undefined, 2)
         core.debug(`The event github.context: ${obstr}`);
-
-        default_description = `- **Repo:** ${payload.repository.full_name}\n`
-                        + `- **Ref:** ${payload.ref}\n`
-                        + `- **Workflow:** ${context.workflow}\n`
-                        + `- **Author:** ${payload.head_commit.author.name}\n`
-                        + `- **Committer:** ${payload.head_commit.committer.name}\n`
-                        + `- **Pusher:** ${payload.pusher.name}\n`
-                        + `- **Commit URL:** ${payload.head_commit.url}\n`
-                        + `- **Commit Message:** ${payload.head_commit.message}\n`
-                        ;
 
         const hook = new webhook.Webhook(webhookUrl);
 
@@ -56,7 +66,7 @@ async function run() {
                         .setName(username || default_username)
                         .setAvatar(avatarUrl || default_avatarUrl)
                         .setColor(color || default_colors[severity])
-                        .setDescription((description || default_description) + "\n" + details)
+                        .setDescription((description || getDefaultDescription()) + "\n" + details)
                         .setFooter(footer || ("Severity: " + long_severity[severity]))
                         .setText(text)
                         .setTime();
