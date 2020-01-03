@@ -78,7 +78,7 @@ async function run() {
                         .setName(username || default_username)
                         .setAvatar(avatarUrl || default_avatarUrl)
                         .setColor(color || default_colors[severity])
-                        .setDescription((description || getDefaultDescription()) + "\n" + details)
+                        .setDescription((description || await getDefaultDescription()) + "\n" + details)
                         .setFooter(footer || ("Severity: " + long_severity[severity]))
                         .setText(text)
                         .setTime();
