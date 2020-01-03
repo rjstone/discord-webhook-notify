@@ -33,7 +33,8 @@ async function getDefaultDescription() {
             + `- **Commit Message:** ${payload.head_commit.message}\n`
             ;
     default:
-        return `**Event:** ${context.eventName}`;
+        return `**Event:** ${context.eventName}`
+            + `- **Repo:** ${payload.repository.full_name}\n`;
     }
 }
 
