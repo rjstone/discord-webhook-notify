@@ -22,7 +22,7 @@ async function getDefaultDescription() {
 
     switch(github.context.eventName) {
     case 'push':
-        return `- **Event: ${context.eventName}\n`
+        return `- **Event:** ${context.eventName}\n`
             + `- **Repo:** ${payload.repository.full_name}\n`
             + `- **Ref:** ${payload.ref}\n`
             + `- **Workflow:** ${context.workflow}\n`
@@ -32,8 +32,19 @@ async function getDefaultDescription() {
             + `- **Commit URL:** ${payload.head_commit.url}\n`
             + `- **Commit Message:** ${payload.head_commit.message}\n`
             ;
+    case 'release':
+        return `- **Event:** ${context.eventName}\n`
+            + `- **Repo:** ${payload.repository.full_name}\n`
+            + `- **Action:** ${payload.action}\n`
+            + `- **Name**: ${payload.release.name}\n`
+            + `- **Author:** ${payload.release.author.login}\n`
+            + `- **Tag:** ${payload.release.tag_name}`
+            + payload.release.prerelease ? ' (pre-release)' : ''
+            + '\n'
+            + `- **Url:** ${payload.release.url}`
+            ;
     default:
-        return `**Event:** ${context.eventName}`
+        return `- **Event:** ${context.eventName}\n`
             + `- **Repo:** ${payload.repository.full_name}\n`;
     }
 }
