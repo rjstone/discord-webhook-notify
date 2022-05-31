@@ -43,6 +43,12 @@ async function getDefaultDescription() {
             + '\n'
             + `- **Url:** ${payload.release.url}`
             ;
+    case 'schedule':
+        return `- **Event:** ${context.eventName}\n`
+            + `- **Ref**: ${context.ref}\n`
+            + `- **Workflow**: ${context.workflow}\n`
+            + `- **Commit SHA**: ${context.sha}\n`
+            ;
     default:
         return `- **Event:** ${context.eventName}\n`
             + `- **Repo:** ${payload.repository.full_name}\n`;
