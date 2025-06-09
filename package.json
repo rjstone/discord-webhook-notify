@@ -1,17 +1,17 @@
 {
   "name": "discord-webhook-notify",
-  "version": "1.0.0",
-  "description": "To be described in more detail later.",
+  "version": "2.0.0",
+  "description": "GitHub Action to send notifications to Discord using a webhook.",
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],
-  "author": "",
-  "license": "ISC",
+  "author": "rjstone@github",
+  "license": "MIT",
   "dependencies": {
     "@actions/core": "^1.2.6",
-    "@actions/github": "^1.1.0",
+    "@actions/github": "^6.0.1",
     "webhook-discord": "^3.5.1"
   }
 }
