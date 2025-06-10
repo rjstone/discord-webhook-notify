@@ -1,8 +1,14 @@
-const core = require('@actions/core');
-const github = require('@actions/github');
+const core = await import('@actions/core');
+const github = await import('@actions/github');
 
-const { EmbedBuilder, WebhookClient } = require('discord.js');
+import { EmbedBuilder, WebhookClient } from 'discord.js';
 
+const lockFile = await import('lockfile');
+const os = await import('os');
+const path = await import('path');
+
+
+const default_holddownTime = 2000; // ms
 const default_avatarUrl = "https://github.githubassets.com/images/modules/logos_page/GitHub-Mark.png";
 const default_username = "GitHub";
 const default_colors = {
@@ -17,31 +23,22 @@ const long_severity = {
 }
 
 async function getDefaultDescription() {
+    // This default is very minimal and its much better to construct one yourself.
+    // See https://docs.github.com/en/actions/writing-workflows/choosing-what-your-workflow-does/accessing-contextual-information-about-workflow-runs#github-context
     const context = github.context;
-    const payload = context.payload;
 
-    switch(github.context.eventName) {
+    // There are now a lot more event types than there were originally.
+    // See https://docs.github.com/en/actions/writing-workflows/choosing-when-your-workflow-runs/events-that-trigger-workflows
+    switch(context.eventName) {
     case 'push':
         return `- **Event:** ${context.eventName}\n`
-            + `- **Repo:** ${payload.repository.full_name}\n`
-            + `- **Ref:** ${payload.ref}\n`
+            + `- **Repo:** ${context.repo}\n`
+            + `- **Ref:** ${context.ref}\n`
             + `- **Workflow:** ${context.workflow}\n`
-            + `- **Author:** ${payload.head_commit.author.name}\n`
-            + `- **Committer:** ${payload.head_commit.committer.name}\n`
-            + `- **Pusher:** ${payload.pusher.name}\n`
-            + `- **Commit URL:** ${payload.head_commit.url}\n`
-            + `- **Commit Message:** ${payload.head_commit.message}\n`
             ;
     case 'release':
         return `- **Event:** ${context.eventName}\n`
-            + `- **Repo:** ${payload.repository.full_name}\n`
-            + `- **Action:** ${payload.action}\n`
-            + `- **Name**: ${payload.release.name}\n`
-            + `- **Author:** ${payload.release.author.login}\n`
-            + `- **Tag:** ${payload.release.tag_name}`
-            + payload.release.prerelease ? ' (pre-release)' : ''
-            + '\n'
-            + `- **Url:** ${payload.release.url}`
+            + `- **Repo:** ${context.repo}\n`
             ;
     case 'schedule':
         return `- **Event:** ${context.eventName}\n`
@@ -51,59 +48,80 @@ async function getDefaultDescription() {
             ;
     default:
         return `- **Event:** ${context.eventName}\n`
-            + `- **Repo:** ${payload.repository.full_name}\n`
+            + `- **Repo:** ${context.repo}\n`
             ;
     }
 }
 
+// For local debugging. Lack of error checking here not such a big deal.
+// Normally doesn't get executed so all these imports don't happen.
+async function getDebugTestUrl() {
+    const fs = await import('node:fs');
+    return fs.readFileSync(path.join(os.homedir(),'github_webhookUrl.txt'),'utf8');
+}
+
 export async function run() {
     try {
-        const webhookUrl = core.getInput('webhookUrl').replace("/github", "");
-        if (!webhookUrl) {
-            core.setFailed("The webhookUrl was not provided. For security reasons the secret URL must be provided "
+        var webhookUrl = core.getInput('webhookUrl').replace("/github", "");
+        if (webhookUrl === 'useTestURL') {
+            webhookUrl = await getDebugTestUrl();
+        } else if (!webhookUrl) {
+            core.warning("The webhookUrl was not provided. For security reasons the secret URL must be provided "
                            + "in the action yaml using a context expression and can not be read as a default.");
-            return;
+                           return;
         }
 
         // goes in message
-        const username = core.getInput('username');
-        const avatarUrl = core.getInput('avatarUrl');
-        const text = core.getInput('text');
+        const username = core.getInput('username')  || default_username;
+        const avatarUrl = core.getInput('avatarUrl')  || default_avatarUrl;
+        const text = core.getInput('text') || '';
 
         // goes in embed in message
-        const severity = core.getInput('severity');
-        const description = core.getInput('description');
-        const details = core.getInput('details');
-        const footer = core.getInput('footer');
+        const severity = core.getInput('severity') || 'info';
+        const title = core.getInput('title') || '';
+        const description = core.getInput('description') || '';
+        const details = core.getInput('details') || '';
+        const footer = core.getInput('footer') || '';
         const color = core.getInput('color');
 
         const context = github.context;
         const obstr = JSON.stringify(context, undefined, 2);
-
         core.debug(`The event github.context: ${obstr}`);
 
         const webhookClient = new WebhookClient({url: webhookUrl}, {rest: {globalRequestsPerSecond: 10}});
 
-        core.info(`${username} ${avatarUrl} ${color} ${description} ${details} ${footer} ${text}`);
-
         const embed = new EmbedBuilder()
-            .setTitle("Title Placeholder")
+            .setTitle(title || long_severity[severity])
             .setColor(color || default_colors[severity])
             .setDescription((description || await getDefaultDescription()) + "\n" + details)
-            .setFooter(footer || ("Severity: " + long_severity[severity]))
+            .setFooter({text: footer || ("Severity: " + long_severity[severity])})
             .setTimestamp();
 
         const msg = {
-            username: username || default_username,
-            avatarURL: avatarUrl || default_avatarUrl,
+            username: username,
+            avatarURL: avatarUrl,
             content: text,
             embeds: [ embed ]
         };
 
-        webhookClient.send(msg);
+        const holddownTime = core.getInput('holddownTime') || default_holddownTime;
+        const lockfile_name = path.join(os.tmpdir(), 'discord-webhook-notify-rate-limiting.lock');
+
+        var promise;
+        lockFile.lock(lockfile_name, { stale: holddownTime, wait: ( holddownTime * 1.5 ) }, function (err) {
+            if (err) {
+                throw new Error("Somehow failed to acquire lock file. holddownTime = ${holddownTime}");
+            } else {
+                promise = webhookClient.send(msg);
+            }
+        });
+        await promise;
+        // We intentionally don't unlock because we want any new calls to have to wait until stale.
+        // lockFile.unlock(lockfile_name, function (err) { })
 
     } catch (error) {
-        core.setFailed(error.message);
+        // core.setFailed(error.message);
+        core.notice(error.message);
     }
 }
 

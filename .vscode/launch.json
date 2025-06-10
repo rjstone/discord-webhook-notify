@@ -5,9 +5,9 @@
       "name": "Local Debug for Github Action",
       "type": "node",
       "request": "launch",
-      "runtimeExecutable": "npx",
+      "runtimeExecutable": "local-action",
       "cwd": "${workspaceRoot}",
-      "args": ["@github/local-action", ".", "index.js", "test.env"],
+      "args": [".", "index.js", "test.env"],
       "console": "integratedTerminal",
       "skipFiles": ["<node_internals>/**", "node_modules/**"]
     }

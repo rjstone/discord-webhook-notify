@@ -1,20 +1,56 @@
 {
   "name": "discord-webhook-notify",
-  "version": "2.0.0",
   "description": "GitHub Action to send notifications to Discord using a webhook.",
-  "main": "index.js",
-  "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
-  },
-  "keywords": [],
+  "version": "2.1.0",
   "author": "rjstone@github",
+  "type": "module",
+  "private": false,
+  "homepage": "https://github.com/rjstone/discord-webhook-notify",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/rjstone/discord-webhook-notify.git"
+  },
+  "bugs": {
+    "url": "https://github.com/rjstone/discord-webhook-notify/issues"
+  },
+  "keywords": [
+    "actions",
+    "discord",
+    "notification"
+  ],
+  "exports": {
+    ".": "./dist/index.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "ci-test": "NODE_OPTIONS=--experimental-vm-modules NODE_NO_WARNINGS=1 npx jest",
+    "test": "NODE_OPTIONS=--experimental-vm-modules NODE_NO_WARNINGS=1 npx jest",
+    "coverage": "npx make-coverage-badge --output-path ./badges/coverage.svg",
+    "lint": "npx eslint .",
+    "local-action": "npx @github/local-action . index.js .env",
+    "compile": "ncc build index.js --license LICENSE"
+  },
   "license": "MIT",
   "dependencies": {
     "@actions/core": "^1.2.6",
     "@actions/github": "^6.0.1",
-    "bufferutil": "^4.0.9",
     "discord.js": "^14.19.3",
-    "lockfile": "^1.0.4",
-    "zlib-sync": "^0.1.10"
-  }
+    "bufferutil": "^4.0.9",
+    "zlib-sync": "^0.1.10",
+    "lockfile": "^1.0.4"
+  },
+  "devDependencies": {
+    "@vercel/ncc": "^0.38.3",
+    "@eslint/compat": "^1.2.9",
+    "@github/local-action": "^3.2.1",
+    "@jest/globals": "^30.0.0",
+    "eslint": "^9.28.0",
+    "eslint-plugin-jest": "^28.13.0",
+    "eslint-plugin-import": "^2.31.0",
+    "jest": "^30.0.0",
+    "make-coverage-badge": "^1.2.0"
+  },
+  "main": "index.js"
 }

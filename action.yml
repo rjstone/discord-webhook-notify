@@ -2,35 +2,54 @@ name: Discord Webhook Notify
 author: rjstone
 description: >
   Send notifications to Discord using a webhook.
+  These can be created by server admins using configuration settings for a channel..
   Works with all execution environments including windows, macos, and linux.
+  Use context expressions and environment variables in the inputs to provide information.
 inputs:
   webhookUrl:
-    description: Discord webhook URL. Should be stored in a secret and inserted as a context expression.
+    description: >
+      Discord webhook URL. Should be stored in a repo secret (Settings>Security>Secrets) and inserted
+      in the action call as a context expression.
     required: true
-  severity:
-    description: Severity level - info, warn, or error
+  holddownTime:
+    description: >
+      The minimum amount of time in ms between successive notifications to avoid triggering Discord's
+      rate limiting. Default = 2000ms.
     required: false
-    default: error
-  description:
-    description: Embed notification message. Use context expressions and environment variables to provide information. Default provides branch and user info.
-    required: false
-  details:
-    description: Additional text after the notification message in case you want to retain the default message.
-    required: false
-  footer:
-    description: Footer for the embed. Defaults to severity.
-    required: false
-  text:
-    description: Text to be sent as normal text above the embed. Use context expressions and environment variables to provide information.
-    required: false
+    default: 2000
   username:
-    description: Username to display in discord.
+    description: Username to display in discord. Defaults to "GitHub".
+    required: false
+    default: GitHub
+  avatarUrl:
+    description: >
+      URL to png of discord avatar to use. Default is the GitHub monochrome mark cat logo.
+      May not work depending on Discord policy.
+    required: false
+    default: https://github.githubassets.com/images/modules/logos_page/GitHub-Mark.png
+  severity:
+    description: Severity level - info, warn, or error. Defaults to info.
+    required: false
+    default: info
+  text:
+    description: Text to be sent as normal text above the embed. Defaults to empty string.
     required: false
   color:
-    description: Notification color in the form poundsign rrggbb (hex). Default determined by severity.
+    description: Notification embed color in the form poundsign rrggbb (hex). Default determined by severity.
     required: false
-  avatarUrl:
-    description: URL to png of discord avatar to use. Default is the GitHub monochrome mark cat logo.
+  title:
+    description: Title for the embed. Defaults to severity long terminology.
+    required: false
+  description:
+    description: Embed notification message. Default provides some minimal github.context workflow info.
+    required: false
+  details:
+    description: >
+      Additional text after the notification message in case you want to retain the default message.
+      Defaults to empty string.
+    required: false
+  footer:
+    description: Footer for the embed. Defaults to severity and timestamp.
     required: false
 runs:
   using: "node20"
