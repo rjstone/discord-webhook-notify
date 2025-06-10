@@ -125013,7 +125013,7 @@ async function run() {
             embeds: [ embed ]
         };
 
-        const holddownTime = core.getInput('holddownTime') || default_holddownTime;
+        const holddownTime = Number.parseInt(core.getInput('holddownTime'), 10) || default_holddownTime;
         const lockfile_name = path.join(os.tmpdir(), 'discord-webhook-notify-rate-limiting.lock');
 
         var promise;
