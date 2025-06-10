@@ -1,7 +1,7 @@
 const core = require('@actions/core');
 const github = require('@actions/github');
 
-const webhook = require("webhook-discord");
+const { EmbedBuilder, WebhookClient } = require('discord.js');
 
 const default_avatarUrl = "https://github.githubassets.com/images/modules/logos_page/GitHub-Mark.png";
 const default_username = "GitHub";
@@ -51,11 +51,12 @@ async function getDefaultDescription() {
             ;
     default:
         return `- **Event:** ${context.eventName}\n`
-            + `- **Repo:** ${payload.repository.full_name}\n`;
+            + `- **Repo:** ${payload.repository.full_name}\n`
+            ;
     }
 }
 
-async function run() {
+export async function run() {
     try {
         const webhookUrl = core.getInput('webhookUrl').replace("/github", "");
         if (!webhookUrl) {
@@ -63,33 +64,43 @@ async function run() {
                            + "in the action yaml using a context expression and can not be read as a default.");
             return;
         }
+
+        // goes in message
+        const username = core.getInput('username');
+        const avatarUrl = core.getInput('avatarUrl');
+        const text = core.getInput('text');
+
+        // goes in embed in message
         const severity = core.getInput('severity');
         const description = core.getInput('description');
         const details = core.getInput('details');
         const footer = core.getInput('footer');
-        const text = core.getInput('text');
-        const username = core.getInput('username');
         const color = core.getInput('color');
-        const avatarUrl = core.getInput('avatarUrl');
-        
+
         const context = github.context;
-        const obstr = JSON.stringify(context, undefined, 2)
+        const obstr = JSON.stringify(context, undefined, 2);
+
         core.debug(`The event github.context: ${obstr}`);
 
-        const hook = new webhook.Webhook(webhookUrl);
+        const webhookClient = new WebhookClient({url: webhookUrl}, {rest: {globalRequestsPerSecond: 10}});
 
-        core.info(`${username} ${avatarUrl} ${color} ${description} ${details} ${footer} ${text}`)
+        core.info(`${username} ${avatarUrl} ${color} ${description} ${details} ${footer} ${text}`);
 
-        const msg = new webhook.MessageBuilder()
-                        .setName(username || default_username)
-                        .setAvatar(avatarUrl || default_avatarUrl)
-                        .setColor(color || default_colors[severity])
-                        .setDescription((description || await getDefaultDescription()) + "\n" + details)
-                        .setFooter(footer || ("Severity: " + long_severity[severity]))
-                        .setText(text)
-                        .setTime();
+        const embed = new EmbedBuilder()
+            .setTitle("Title Placeholder")
+            .setColor(color || default_colors[severity])
+            .setDescription((description || await getDefaultDescription()) + "\n" + details)
+            .setFooter(footer || ("Severity: " + long_severity[severity]))
+            .setTimestamp();
 
-        hook.send(msg);
+        const msg = {
+            username: username || default_username,
+            avatarURL: avatarUrl || default_avatarUrl,
+            content: text,
+            embeds: [ embed ]
+        };
+
+        webhookClient.send(msg);
 
     } catch (error) {
         core.setFailed(error.message);
