@@ -1,0 +1,33 @@
+{
+    "workbench.colorCustomizations": {
+        "activityBar.activeBackground": "#c2d532",
+        "activityBar.background": "#c2d532",
+        "activityBar.foreground": "#15202b",
+        "activityBar.inactiveForeground": "#15202b99",
+        "activityBarBadge.background": "#21909f",
+        "activityBarBadge.foreground": "#e7e7e7",
+        "commandCenter.border": "#15202b99",
+        "sideBar.border": "#c2d532",
+        "titleBar.activeBackground": "#a0b024",
+        "titleBar.activeForeground": "#15202b",
+        "titleBar.inactiveBackground": "#a0b02499",
+        "titleBar.inactiveForeground": "#15202b99",
+        "titleBar.border": "#a0b024",
+        "statusBar.background": "#a0b024",
+        "statusBar.border": "#a0b024",
+        "statusBar.foreground": "#15202b",
+        "statusBarItem.hoverBackground": "#79861b",
+        "statusBarItem.remoteBackground": "#a0b024",
+        "statusBarItem.remoteForeground": "#15202b",
+        "tab.activeBorder": "#c2d532",
+        "statusBar.debuggingBackground": "#3424b0",
+        "statusBar.debuggingBorder": "#3424b0",
+        "statusBar.debuggingForeground": "#e7e7e7",
+        "panel.border": "#c2d532"
+    },
+    "peacock.color": "#a0b024",
+    "peacock.affectDebuggingStatusBar": true,
+    "peacock.affectEditorGroupBorder": false,
+    "peacock.affectPanelBorder": true,
+    "peacock.affectTabActiveBorder": true
+}

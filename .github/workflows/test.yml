@@ -5,24 +5,6 @@ jobs:
     runs-on: windows-latest
     name: Windows Test Job
     steps:
-    - name: Windows Test Info
-      uses: rjstone/discord-webhook-notify@v2
-      with:
-        severity: info
-        details: Test succeeded.
-        webhookUrl: ${{ secrets.DISCORD_WEBHOOK }}
-    - name: Windows Test Warn
-      uses: rjstone/discord-webhook-notify@v2
-      with:
-        severity: warn
-        details: Test warning.
-        webhookUrl: ${{ secrets.DISCORD_WEBHOOK }}
-    - name: Windows Test Error
-      uses: rjstone/discord-webhook-notify@v2
-      with:
-        severity: error
-        details: Test error.
-        webhookUrl: ${{ secrets.DISCORD_WEBHOOK }}
     - name: Windows Test Custom
       uses: rjstone/discord-webhook-notify@v2
       with:
@@ -35,46 +17,16 @@ jobs:
         footer: This is a footer.
         text: This is where text goes.
         webhookUrl: ${{ secrets.DISCORD_WEBHOOK }}
-    - name: Windows Test Success
-      uses: rjstone/discord-webhook-notify@v2
-      if: success()
-      with:
-        severity: info
-        webhookUrl: ${{ secrets.DISCORD_WEBHOOK }}
     - name: Windows Test Failure
       uses: rjstone/discord-webhook-notify@v2
       if: failure()
       with:
         severity: error
         webhookUrl: ${{ secrets.DISCORD_WEBHOOK }}
-    - name: Windows Test Cancelled
-      uses: rjstone/discord-webhook-notify@v2
-      if: cancelled()
-      with:
-        severity: warn
-        webhookUrl: ${{ secrets.DISCORD_WEBHOOK }}
   linux_test:
     runs-on: ubuntu-latest
     name: Linux Test Job
     steps:
-    - name: Linux Test Info
-      uses: rjstone/discord-webhook-notify@v2
-      with:
-        severity: info
-        details: Test succeeded.
-        webhookUrl: ${{ secrets.DISCORD_WEBHOOK }}
-    - name: Linux Test Warn
-      uses: rjstone/discord-webhook-notify@v2
-      with:
-        severity: warn
-        details: Test warning.
-        webhookUrl: ${{ secrets.DISCORD_WEBHOOK }}
-    - name: Linux Test Error
-      uses: rjstone/discord-webhook-notify@v2
-      with:
-        severity: error
-        details: Test error.
-        webhookUrl: ${{ secrets.DISCORD_WEBHOOK }}
     - name: Linux Test Custom
       uses: rjstone/discord-webhook-notify@v2
       with:
@@ -87,46 +39,16 @@ jobs:
         footer: This is a footer.
         text: This is where text goes.
         webhookUrl: ${{ secrets.DISCORD_WEBHOOK }}
-    - name: Linux Test Success
-      uses: rjstone/discord-webhook-notify@v2
-      if: success()
-      with:
-        severity: info
-        webhookUrl: ${{ secrets.DISCORD_WEBHOOK }}
     - name: Linux Test Failure
       uses: rjstone/discord-webhook-notify@v2
       if: failure()
       with:
         severity: error
         webhookUrl: ${{ secrets.DISCORD_WEBHOOK }}
-    - name: Linux Test Cancelled
-      uses: rjstone/discord-webhook-notify@v2
-      if: cancelled()
-      with:
-        severity: warn
-        webhookUrl: ${{ secrets.DISCORD_WEBHOOK }}
   macos_test:
     runs-on: macos-latest
     name: MacOS Test Job
     steps:
-    - name: MacOS Test Info
-      uses: rjstone/discord-webhook-notify@v2
-      with:
-        severity: info
-        details: Test succeeded.
-        webhookUrl: ${{ secrets.DISCORD_WEBHOOK }}
-    - name: MacOS Test Warn
-      uses: rjstone/discord-webhook-notify@v2
-      with:
-        severity: warn
-        details: Test warning.
-        webhookUrl: ${{ secrets.DISCORD_WEBHOOK }}
-    - name: MacOS Test Error
-      uses: rjstone/discord-webhook-notify@v2
-      with:
-        severity: error
-        details: Test error.
-        webhookUrl: ${{ secrets.DISCORD_WEBHOOK }}
     - name: MacOS Test Custom
       uses: rjstone/discord-webhook-notify@v2
       with:
@@ -139,21 +61,9 @@ jobs:
         footer: This is a footer.
         text: This is where text goes.
         webhookUrl: ${{ secrets.DISCORD_WEBHOOK }}
-    - name: MacOS Test Success
-      uses: rjstone/discord-webhook-notify@v2
-      if: success()
-      with:
-        severity: info
-        webhookUrl: ${{ secrets.DISCORD_WEBHOOK }}
     - name: MacOS Test Failure
       uses: rjstone/discord-webhook-notify@v2
       if: failure()
       with:
         severity: error
-        webhookUrl: ${{ secrets.DISCORD_WEBHOOK }}
-    - name: MacOS Test Cancelled
-      uses: rjstone/discord-webhook-notify@v2
-      if: cancelled()
-      with:
-        severity: warn
         webhookUrl: ${{ secrets.DISCORD_WEBHOOK }}
