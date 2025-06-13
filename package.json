@@ -3,7 +3,7 @@
   "description": "GitHub Action to send notifications to Discord using a webhook.",
   "version": "2.1.0",
   "author": "rjstone@github",
-  "type": "module",
+  "type": "commonjs",
   "private": false,
   "homepage": "https://github.com/rjstone/discord-webhook-notify",
   "repository": {
@@ -30,7 +30,7 @@
     "coverage": "npx make-coverage-badge --output-path ./badges/coverage.svg",
     "lint": "npx eslint .",
     "local-action": "npx @github/local-action . index.js .env",
-    "compile": "ncc build index.js --license LICENSE"
+    "build": "ncc build index.js --license LICENSE"
   },
   "license": "MIT",
   "dependencies": {
@@ -38,8 +38,7 @@
     "@actions/github": "^6.0.1",
     "discord.js": "^14.19.3",
     "bufferutil": "^4.0.9",
-    "zlib-sync": "^0.1.10",
-    "lockfile": "^1.0.4"
+    "zlib-sync": "^0.1.10"
   },
   "devDependencies": {
     "@vercel/ncc": "^0.38.3",
