@@ -6,7 +6,7 @@ jobs:
     name: Windows Test Job
     steps:
     - name: Windows Test Custom
-      uses: rjstone/discord-webhook-notify@v2
+      uses: rjstone/discord-webhook-notify@main
       with:
         severity: info
         username: CustomUsername
@@ -18,7 +18,7 @@ jobs:
         text: This is where text goes.
         webhookUrl: ${{ secrets.DISCORD_WEBHOOK }}
     - name: Windows Test Failure
-      uses: rjstone/discord-webhook-notify@v2
+      uses: rjstone/discord-webhook-notify@main
       if: failure()
       with:
         severity: error
@@ -28,7 +28,7 @@ jobs:
     name: Linux Test Job
     steps:
     - name: Linux Test Custom
-      uses: rjstone/discord-webhook-notify@v2
+      uses: rjstone/discord-webhook-notify@main
       with:
         severity: info
         username: CustomUsername
@@ -40,7 +40,7 @@ jobs:
         text: This is where text goes.
         webhookUrl: ${{ secrets.DISCORD_WEBHOOK }}
     - name: Linux Test Failure
-      uses: rjstone/discord-webhook-notify@v2
+      uses: rjstone/discord-webhook-notify@main
       if: failure()
       with:
         severity: error
@@ -50,7 +50,7 @@ jobs:
     name: MacOS Test Job
     steps:
     - name: MacOS Test Custom
-      uses: rjstone/discord-webhook-notify@v2
+      uses: rjstone/discord-webhook-notify@main
       with:
         severity: info
         username: CustomUsername
@@ -62,7 +62,7 @@ jobs:
         text: This is where text goes.
         webhookUrl: ${{ secrets.DISCORD_WEBHOOK }}
     - name: MacOS Test Failure
-      uses: rjstone/discord-webhook-notify@v2
+      uses: rjstone/discord-webhook-notify@main
       if: failure()
       with:
         severity: error
