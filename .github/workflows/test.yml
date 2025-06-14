@@ -1,5 +1,8 @@
-name: Test Action
-on: [ push ]
+name: Simple Use Case Tests
+on:
+  push:
+    branches:
+      - main
 jobs:
   windows_test:
     runs-on: windows-latest
