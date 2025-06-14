@@ -2,9 +2,7 @@ name: Discord Webhook Notify
 author: rjstone
 description: >
   Send notifications to Discord using a webhook.
-  These can be created by server admins using configuration settings for a channel..
   Works with all execution environments including windows, macos, and linux.
-  Use context expressions and environment variables in the inputs to provide information.
 inputs:
   webhookUrl:
     description: >
