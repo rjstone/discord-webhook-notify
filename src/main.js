@@ -16,7 +16,6 @@ import { EmbedBuilder, WebhookClient } from "discord.js";
 import * as defaults from "./defaults";
 import { ensureDurationSinceLastRun, updateLockFileTime } from "./timelock";
 
-
 /**
  * For local workstation debugging only.
  * Will get the webhook URL from ~/github_webhookUrl.txt
@@ -26,7 +25,9 @@ import { ensureDurationSinceLastRun, updateLockFileTime } from "./timelock";
  */
 async function getDebugTestUrl() {
   return fs.readFileSync(
-    path.join(os.homedir(), "github_webhookUrl.txt"), "utf8");
+    path.join(os.homedir(), "github_webhookUrl.txt"),
+    "utf8"
+  );
 }
 
 /**
@@ -43,7 +44,8 @@ export async function run() {
     } else if (!webhookUrl) {
       core.warning(
         "The webhookUrl was not provided. For security reasons the secret URL must be provided " +
-          "in the action yaml using a context expression and can not be read as a default."
+        "in the action yaml using a context expression and can not be read as a default.\n" +
+        "DISCORD NOTIFICATION NOT SENT"
       );
       return;
     }
@@ -54,7 +56,7 @@ export async function run() {
     const text = core.getInput("text") || "";
 
     // goes in embed in message
-    const severity = core.getInput("severity") || "info";
+    const severity = core.getInput("severity") || "none";
     const title = core.getInput("title") || "";
     const description = core.getInput("description") || "";
     const details = core.getInput("details") || "";
@@ -70,28 +72,44 @@ export async function run() {
       { rest: { globalRequestsPerSecond: 10 } }
     );
 
-    const embed = new EmbedBuilder()
-      .setTitle(title || defaults.longSeverity[severity])
-      .setColor(color || defaults.colors[severity])
-      .setDescription((description || (await defaults.getDefaultDescription())) + "\n" + details)
-      .setFooter({ text: footer || "Severity: " + defaults.longSeverity[severity] })
-      .setTimestamp();
+    var msg;
 
-    const msg = {
-      username: username,
-      avatarURL: avatarUrl,
-      content: text,
-      embeds: [embed],
-    };
+    if (severity === "none") {
+      msg = {
+        username: username,
+        avatarURL: avatarUrl,
+        content: text,
+      };
+    } else {
+      const embed = new EmbedBuilder()
+        .setTitle(title || defaults.longSeverity[severity])
+        .setColor(color || defaults.colors[severity])
+        .setDescription(
+          (description || (await defaults.getDefaultDescription())) +
+            "\n" +
+            details
+        )
+        .setFooter({
+          text: footer || "Severity: " + defaults.longSeverity[severity],
+        })
+        .setTimestamp();
+      msg = {
+        username: username,
+        avatarURL: avatarUrl,
+        content: text,
+        embeds: [embed],
+      };
+    }
 
-    core.debug("Before: " + Date());
     const holddownTime =
-      Number.parseInt(core.getInput("holddownTime"), 10) || defaults.holddownTime;
+      Number.parseInt(core.getInput("holddownTime"), 10) ||
+      defaults.holddownTime;
+
     await ensureDurationSinceLastRun(holddownTime);
-    core.debug("After: " + Date());
 
     await webhookClient.send(msg);
   } catch (error) {
+    // not so sure the workflow should show an error just because the notification failed
     core.notice(error.message);
     return;
   }

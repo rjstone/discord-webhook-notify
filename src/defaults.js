@@ -29,33 +29,11 @@ export const longSeverity = {
 export async function getDefaultDescription() {
   const context = github.context;
 
-  // There are now a lot more event types than there were long ago.
-  // See https://docs.github.com/en/actions/writing-workflows/choosing-when-your-workflow-runs/events-that-trigger-workflows
-  switch (context.eventName) {
-    case "push":
-      return (
-        `- **Event:** ${context.eventName}\n` +
-        `- **Repo:** ${context.repo}\n` +
-        `- **Ref:** ${context.ref}\n` +
-        `- **Workflow:** ${context.workflow}\n`
-      );
-
-    case "release":
-      return (
-        `- **Event:** ${context.eventName}\n` + `- **Repo:** ${context.repo}\n`
-      );
-
-    case "schedule":
-      return (
-        `- **Event:** ${context.eventName}\n` +
-        `- **Ref**: ${context.ref}\n` +
-        `- **Workflow**: ${context.workflow}\n` +
-        `- **Commit SHA**: ${context.sha}\n`
-      );
-
-    default:
-      return (
-        `- **Event:** ${context.eventName}\n` + `- **Repo:** ${context.repo}\n`
-      );
-  }
+  // TODO: We could switch on context.eventName to print different stuff for different event types
+  return (
+    `- **Repository:** [${context.repository}](${context.repositoryUrl})\n` +
+    `- **Workflow:** ${context.workflow}\n` +
+    `- **Event:** ${context.eventName}\n` +
+    `- **Triggering Actor:** ${context.triggering_actor}\n`
+  );
 }

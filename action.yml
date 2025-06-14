@@ -27,13 +27,13 @@ inputs:
       May not work depending on Discord policy.
     required: false
     default: https://github.githubassets.com/images/modules/logos_page/GitHub-Mark.png
+  text:
+    description: Text to be sent as normal text above the embed. Defaults to empty string.
+    required: false
   severity:
     description: Severity level - info, warn, or error.
     required: false
     default: info
-  text:
-    description: Text to be sent as normal text above the embed. Defaults to empty string.
-    required: false
   color:
     description: "Notification embed color in the form #rrggbb (hex). Default determined by severity."
     required: false
@@ -45,11 +45,11 @@ inputs:
     required: false
   details:
     description: >
-      Additional text after the notification message in case you want to retain the default message.
+      Additional text after the description in case you want to retain the default embed description.
       Defaults to empty string.
     required: false
   footer:
-    description: Footer for the embed. Defaults to severity and timestamp.
+    description: Footer for the embed. Defaults to long terminology severity.
     required: false
 runs:
   using: "node20"
