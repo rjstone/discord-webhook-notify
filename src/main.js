@@ -64,12 +64,10 @@ export async function run() {
     const color = core.getInput("color");
 
     const context = github.context;
-    const obstr = JSON.stringify(context, undefined, 2);
-    // core.debug(`The event github.context: ${obstr}`)
 
     const webhookClient = new WebhookClient(
       { url: webhookUrl },
-      { rest: { globalRequestsPerSecond: 10 } }
+      { rest: { globalRequestsPerSecond: 1 } }
     );
 
     var msg;
