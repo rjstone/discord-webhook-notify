@@ -1,4 +1,4 @@
-name: Continuous Integration (Test Only For Now)
+name: Continuous Integration
 
 on:
   pull_request:
@@ -13,7 +13,7 @@ permissions:
 
 jobs:
   test-javascript:
-    name: JavaScript Tests
+    name: Unit Tests (jest)
     runs-on: ubuntu-latest
 
     steps:
@@ -38,10 +38,14 @@ jobs:
 
       - name: Test
         id: npm-ci-test
-        run: npm run ci-test
+        run: npm run test
+
+      - name: Coverage Badge
+        id: npm-coverage
+        run: npm run coverage
 
   test-action:
-    name: Unit Tests
+    name: Action Test
     runs-on: ubuntu-latest
 
     steps:
@@ -49,11 +53,13 @@ jobs:
         id: checkout
         uses: actions/checkout@v4
 
-      - name: Test Local Action
+      - name: Test Action
         id: test-action
         uses: ./
         with:
           webhookUrl: ${{ secrets.DISCORD_WEBHOOK }}
+          username: "CI Test"
+          severity: "info"
 
       - name: Print Output
         id: output
