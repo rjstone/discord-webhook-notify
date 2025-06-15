@@ -3,19 +3,28 @@
 	"tasks": [
 		{
 			"type": "shell",
-			"command": "npm install",
+			"command": "npm install --include prod --include dev --include optional --no-fund",
 			"group": "build",
 			"problemMatcher": [],
 			"label": "npm: install",
-			"detail": "install dependencies from package"
+			"detail": "install prod, dev, and optional dependencies from package.json"
 		},
 		{
 			"type": "shell",
-			"command": "ncc build index.js --license LICENSE",
+			"command": "npm run package",
 			"group": "build",
 			"problemMatcher": [],
-			"label": "vercel/ncc: build",
-			"detail": "compile index.js and node_modules to avoid mess"
+			"label": "npm: package (rollup)",
+			"detail": "rollup index.js and node_modules"
+		},
+		{
+			"type": "shell",
+			"command": "npm run test",
+			"group": "test",
+			"problemMatcher": [],
+			"label": "npm: test (jest)",
+			"detail": "run unit tests with jest"
 		}
+
 	]
 }
