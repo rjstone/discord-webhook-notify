@@ -3,6 +3,7 @@
 This sends a notification to discord using a webhook URL. It is written in JavaScript so *it will work with windows, osx, and linux execution environments*.
 
 ## Status
+
 Unit Tests: ![Coverage SVG](./badges/coverage.svg)
 
 ## Setup Instructions

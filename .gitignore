@@ -103,3 +103,6 @@ __tests__/runner/*
 
 # Lockfile
 *.lock
+
+# repl file
+SCRATCH*.js
