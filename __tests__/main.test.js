@@ -13,7 +13,7 @@ jest.unstable_mockModule("@actions/core", () => core);
 
 // The module being tested should be imported dynamically. This ensures that the
 // mocks are used in place of any actual dependencies.
-const { run } = await import("../src/main.js");
+const { run, getDebugTestUrl } = await import("../src/main.js");
 const { EmbedBuilder, WebhookClient } = await import("discord.js");
 
 describe("main.js", () => {
@@ -34,6 +34,11 @@ describe("main.js", () => {
     expect(run).toBeDefined();
     expect(run).toBeInstanceOf(Function);
   });
+
+  it("has a function called getDebugTestUrl", async () => {
+    expect(getDebugTestUrl).toBeInstanceOf(Function);
+  });
+
 
   test.todo("run generates the right error when no webhookUrl is provided");
   test.todo("run works with all default inputs");
