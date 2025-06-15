@@ -28,7 +28,6 @@ export const longSeverity = {
  */
 export async function getDefaultDescription() {
   const context = github.context;
-
   // TODO: We could switch on context.eventName to print different stuff for different event types
   return (
     `- **Repository:** [${context.repository}](${context.repositoryUrl})\n` +

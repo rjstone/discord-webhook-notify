@@ -11,10 +11,12 @@ import path from "node:path";
 import * as core from "@actions/core";
 import * as github from "@actions/github";
 
-import { EmbedBuilder, WebhookClient } from "discord.js";
+import { EmbedBuilder, WebhookClient, MessageFlags } from "discord.js";
 
 import * as defaults from "./defaults";
 import { ensureDurationSinceLastRun, updateLockFileTime } from "./timelock";
+import { truncateStringIfNeeded, sanitizeUsername } from "./strutil";
+
 
 /**
  * For local workstation debugging only.
@@ -23,7 +25,7 @@ import { ensureDurationSinceLastRun, updateLockFileTime } from "./timelock";
  *
  * @returns { String } with the Webhook URL, or whatever is in the txt file
  */
-async function getDebugTestUrl() {
+export async function getDebugTestUrl() {
   return fs.readFileSync(
     path.join(os.homedir(), "github_webhookUrl.txt"),
     "utf8"
@@ -51,9 +53,9 @@ export async function run() {
     }
 
     // goes in message
-    const username = core.getInput("username") || defaults.username;
-    const avatarUrl = core.getInput("avatarUrl") || defaults.avatarUrl;
-    const text = core.getInput("text") || "";
+    const username = sanitizeUsername(core.getInput("username") || defaults.username);
+    const avatarUrl = truncateStringIfNeeded(core.getInput("avatarUrl")) || defaults.avatarUrl;
+    const text = truncateStringIfNeeded(core.getInput("text")) || "";
 
     // goes in embed in message
     const severity = core.getInput("severity") || "none";
@@ -63,12 +65,7 @@ export async function run() {
     const footer = core.getInput("footer") || "";
     const color = core.getInput("color");
 
-    const context = github.context;
-
-    const webhookClient = new WebhookClient(
-      { url: webhookUrl },
-      { rest: { globalRequestsPerSecond: 1 } }
-    );
+    const webhookClient = new WebhookClient( { url: webhookUrl } );
 
     var msg;
 
@@ -77,18 +74,19 @@ export async function run() {
         username: username,
         avatarURL: avatarUrl,
         content: text,
+        flags: MessageFlags.SuppressNotifications
       };
     } else {
       const embed = new EmbedBuilder()
-        .setTitle(title || defaults.longSeverity[severity])
+        .setTitle(truncateStringIfNeeded(title) || defaults.longSeverity[severity])
         .setColor(color || defaults.colors[severity])
         .setDescription(
-          (description || (await defaults.getDefaultDescription())) +
+          truncateStringIfNeeded((description || (await defaults.getDefaultDescription())) +
             "\n" +
-            details
+            details)
         )
         .setFooter({
-          text: footer || "Severity: " + defaults.longSeverity[severity],
+          text: truncateStringIfNeeded(footer) || "Severity: " + defaults.longSeverity[severity],
         })
         .setTimestamp();
       msg = {
@@ -114,3 +112,4 @@ export async function run() {
 
   await updateLockFileTime();
 }
+
