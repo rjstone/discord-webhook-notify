@@ -47,7 +47,7 @@ export async function ensureDurationSinceLastRun(minIntervalSinceLastRunMs) {
     const waitTimeMs = minIntervalSinceLastRunMs - sinceLastRunMs * 0.9;
     core.info(
       "Calling Discord Webhook API too frequently. Waiting: " +
-        waitTimeMs +
+        waitTimeMs.toFixed(0) +
         "ms"
     );
     return timersPromises.scheduler.wait(waitTimeMs);
@@ -59,7 +59,7 @@ export async function ensureDurationSinceLastRun(minIntervalSinceLastRunMs) {
  * @returns { undefined }
  */
 export async function updateLockFileTime() {
-  const lockfileDir = core.getInput("lockfile_dir") || "./";
+  const lockfileDir = core.getInput("lockfile_dir") || ".";
   const lockfilePath = path.join(lockfileDir, defaults.lockfileName);
   const nowDateObj = new Date();
   return fs.writeFileSync(lockfilePath, nowDateObj.toISOString());
