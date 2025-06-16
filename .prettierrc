@@ -3,5 +3,7 @@
   "useTabs": false,
   "semi": true,
   "singleQuote": false,
-  "endOfLine": "auto"
+  "endOfLine": "auto",
+  "printwidth": 100,
+  "trailingComma": "none"
 }
