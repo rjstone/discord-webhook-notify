@@ -30,9 +30,11 @@ inputs:
     description: Text to be sent as normal text above the embed. Defaults to empty string.
     required: false
   severity:
-    description: Severity level - info, warn, or error.
+    description: >
+      Severity level - info, warn, error, or none. Using "none" will cause no embed to be added.
+      Using any other value will cause an embed with a set of matching defaults to be added.
     required: false
-    default: info
+    default: none
   color:
     description: "Notification embed color in the form #rrggbb (hex). Default determined by severity."
     required: false
