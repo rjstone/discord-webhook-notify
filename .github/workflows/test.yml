@@ -1,5 +1,5 @@
 name: Simple Use Case Tests
-permnissions: read-all
+permissions: read-all
 on:
   push:
     branches:
