@@ -11,7 +11,7 @@ import path from "node:path";
 import * as core from "@actions/core";
 // import * as github from "@actions/github";
 
-import { EmbedBuilder, WebhookClient } from "discord.js";
+import { EmbedBuilder, WebhookClient, MessageFlags } from "discord.js";
 
 import * as defaults from "./defaults";
 import { ensureDurationSinceLastRun, updateLockFileTime } from "./timelock";
