@@ -4,6 +4,8 @@
 
 import { truncateBytes } from "multibyte";
 
+import * as core from "@actions/core";
+
 /*
     From Discord docs:
       Embed titles are limited to 256 characters
@@ -58,4 +60,18 @@ export function sanitizeUsername(username) {
     return "Illegal Username: Fix It!";
   }
   return username.replace(/(@|#|:|```|discord)*/ig, "").slice(0,32);
+}
+
+/**
+ * Apply processing to some strings.
+ * @param { String } sStr - string to process
+ * @returns { String } - processed string, or jStr
+ */
+export function processIfNeeded(jStr) {
+  const processingOptions = core.getInput("processingOptions");
+  if (/percentDecode/.test(processingOptions)) {
+    return decodeURIComponent(jStr);
+  } else {
+    return jStr;
+  }
 }

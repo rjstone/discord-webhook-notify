@@ -21,7 +21,7 @@ import * as defaults from "./defaults";
  * @returns { undefined | Promise } from node:timers/promises scheduler.wait()
  */
 export async function ensureDurationSinceLastRun(minIntervalSinceLastRunMs) {
-  const lockfileDir = core.getInput("lockfile_dir") || ".";
+  const lockfileDir = core.getInput("lockfileDir") || ".";
   const lockfilePath = path.join(lockfileDir, defaults.lockfileName);
   const nowDateObj = new Date();
 

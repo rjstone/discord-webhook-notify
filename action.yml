@@ -9,14 +9,15 @@ inputs:
       Discord webhook URL. Should be stored in a repo secret (Settings>Security>Secrets) and inserted
       in the action call as a context expression.
     required: true
-  holddownTime:
+  flags:
     description: >
-      The minimum amount of time in miliseconds between successive notifications to avoid triggering Discord's
-      rate limiting.
+      A whitespace-separated list of MessageFlags. The only one supported currently is SuppressNotifications.
     required: false
-    default: "3000"
+    default: ""
   username:
-    description: Username to display in discord.
+    description: >
+      Username to display in discord. Must be 2-32 chars long and can't contain: @, #, :, ```, discord
+      Also can't be "here" or "everyone", for obvious reasons.
     required: false
     default: "Notification (Github Actions)"
   avatarUrl:
@@ -49,6 +50,28 @@ inputs:
   footer:
     description: Footer for the embed. Defaults to long terminology severity.
     required: false
+  processingOptions:
+    description: >
+      (EXPERIMENTAL) Set to "percentDecode" if you want some inputs that are
+      often multi-line strings to be run through "percent decoding" using
+      decodeURIComponent(). This can be useful in cases where the output from
+      another action should contain newlines, but won't be preserved by the
+      Workflow system if it does.
+    required: false
+    default: ""
+  holddownTime:
+    description: >
+      The minimum amount of time in miliseconds between successive notifications to avoid triggering Discord's
+      rate limiting.
+    required: false
+    default: "3000"
+  lockfileDir:
+    description: >
+      The directory where the lockfile used for saving last run time is stored.
+    required: false
+    default: "."
+
+
 runs:
   using: "node20"
   main: "dist/index.js"

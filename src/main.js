@@ -11,12 +11,15 @@ import path from "node:path";
 import * as core from "@actions/core";
 // import * as github from "@actions/github";
 
-import { EmbedBuilder, WebhookClient, MessageFlags } from "discord.js";
+import { EmbedBuilder, WebhookClient } from "discord.js";
 
 import * as defaults from "./defaults";
 import { ensureDurationSinceLastRun, updateLockFileTime } from "./timelock";
-import { truncateStringIfNeeded, sanitizeUsername } from "./strutil";
-
+import {
+  truncateStringIfNeeded,
+  sanitizeUsername,
+  processIfNeeded
+} from "./strutil";
 
 /**
  * For local workstation debugging only.
@@ -46,16 +49,21 @@ export async function run() {
     } else if (!webhookUrl) {
       core.warning(
         "The webhookUrl was not provided. For security reasons the secret URL must be provided " +
-        "in the action yaml using a context expression and can not be read as a default.\n" +
-        "DISCORD NOTIFICATION NOT SENT"
+          "in the action yaml using a context expression and can not be read as a default.\n" +
+          "DISCORD NOTIFICATION NOT SENT"
       );
       return;
     }
 
     // goes in message
-    const username = sanitizeUsername(core.getInput("username") || defaults.username);
-    const avatarUrl = truncateStringIfNeeded(core.getInput("avatarUrl")) || defaults.avatarUrl;
-    const text = truncateStringIfNeeded(core.getInput("text")) || "";
+    const username = sanitizeUsername(
+      core.getInput("username") || defaults.username
+    );
+    const avatarUrl =
+      truncateStringIfNeeded(core.getInput("avatarUrl")) || defaults.avatarUrl;
+    const text =
+      truncateStringIfNeeded(processIfNeeded(core.getInput("text"))) || "";
+    const flags = core.getInput("flags") || "";
 
     // goes in embed in message
     const severity = core.getInput("severity") || "none";
@@ -65,7 +73,7 @@ export async function run() {
     const footer = core.getInput("footer") || "";
     const color = core.getInput("color");
 
-    const webhookClient = new WebhookClient( { url: webhookUrl } );
+    const webhookClient = new WebhookClient({ url: webhookUrl });
 
     var msg;
 
@@ -73,28 +81,48 @@ export async function run() {
       msg = {
         username: username,
         avatarURL: avatarUrl,
-        content: text,
-        flags: MessageFlags.SuppressNotifications
+        content: text
       };
     } else {
       const embed = new EmbedBuilder()
-        .setTitle(truncateStringIfNeeded(title) || defaults.longSeverity[severity])
+        .setTitle(
+          truncateStringIfNeeded(title) || defaults.longSeverity[severity]
+        )
         .setColor(color || defaults.colors[severity])
         .setDescription(
-          truncateStringIfNeeded((description || (await defaults.getDefaultDescription())) +
-            "\n" +
-            details)
+          truncateStringIfNeeded(
+            processIfNeeded(
+              (description || (await defaults.getDefaultDescription())) +
+                "\n" +
+                details
+            )
+          )
         )
         .setFooter({
-          text: truncateStringIfNeeded(footer) || "Severity: " + defaults.longSeverity[severity],
+          text:
+            truncateStringIfNeeded(processIfNeeded(footer)) ||
+            "Severity: " + defaults.longSeverity[severity]
         })
         .setTimestamp();
       msg = {
         username: username,
         avatarURL: avatarUrl,
         content: text,
-        embeds: [embed],
+        embeds: [embed]
       };
+    }
+
+    if (flags !== "") {
+      msg["flags"] = 0;
+      if (/SuppressNotifications/.test(flags)) {
+        msg["flags"] |= MessageFlags.SuppressNotifications;
+      }
+      if (/SuppressEmbeds/.test(flags)) {
+        msg["flags"] |= MessageFlags.SuppressEmbeds;
+      }
+      if (/Loading/.test(flags)) {
+        msg["flags"] |= MessageFlags.Loading;
+      }
     }
 
     const holddownTime =
@@ -112,4 +140,3 @@ export async function run() {
 
   await updateLockFileTime();
 }
-

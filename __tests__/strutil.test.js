@@ -2,8 +2,9 @@
  * Unit tests for strutil.js
  */
 import { jest } from "@jest/globals";
+import * as core from "../__fixtures__/core.js";
 
-// jest.unstable_mockModule("@actions/core", () => core);
+jest.unstable_mockModule("@actions/core", () => core);
 
 const strutil = await import("../src/strutil");
 
@@ -60,5 +61,24 @@ describe("strutil.js", () => {
   it("leaves valid usernames alone", () => {
     const validUsername = "PerfectlyValid UserName123";
     expect(strutil.sanitizeUsername(validUsername)).toMatch(validUsername);
+  });
+
+  it("decodes percent-encoded strings when option set", () => {
+    core.getInput.mockImplementation((input) => {
+      return {
+        processingOptions: " percentDecode ",
+      }[input];
+    });
+    expect(strutil.processIfNeeded("foo%0Abar%20bla")).toMatch("foo\nbar bla");
+  });
+
+    it("doesn't decode percent-encoded strings when option NOT set", () => {
+    core.getInput.mockImplementation((input) => {
+      return {
+        processingOptions: "  ",
+      }[input];
+    });
+    const tStr = "foo%20bar%%%breaking%%%%%stuff";
+    expect(strutil.processIfNeeded(tStr)).toMatch(tStr);
   });
 });
