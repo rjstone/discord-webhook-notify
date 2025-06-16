@@ -3,7 +3,7 @@
  */
 import { jest } from "@jest/globals";
 
-jest.unstable_mockModule("@actions/core", () => core);
+// jest.unstable_mockModule("@actions/core", () => core);
 
 const strutil = await import("../src/strutil");
 
@@ -44,12 +44,8 @@ describe("strutil.js", () => {
     expect(strutil.sanitizeUsername("```code")).toMatch(/^code$/);
     expect(strutil.sanitizeUsername(":smile:")).toMatch(/^smile$/);
     expect(strutil.sanitizeUsername("#hashtag")).toMatch(/^hashtag$/);
-    expect(strutil.sanitizeUsername("Cool Discord Dude")).toMatch(
-      /^Cool  Dude$/,
-    );
-    expect(strutil.sanitizeUsername("@Cool```Discord:::Du###de")).toMatch(
-      /^CoolDude$/,
-    );
+    expect(strutil.sanitizeUsername("Cool Discord Dude")).toMatch(/^Cool {2}Dude$/);
+    expect(strutil.sanitizeUsername("@Cool```Discord:::Du###de")).toMatch(/^CoolDude$/);
   });
 
   it("replaces usernames shorter than 2 characters with notice", () => {

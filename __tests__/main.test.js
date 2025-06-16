@@ -7,14 +7,15 @@
  */
 import { jest } from "@jest/globals";
 import * as core from "../__fixtures__/core.js";
+import * as discord from "/__fixtures__/discord.js";
 
 // Mocks should be declared before the module being tested is imported.
 jest.unstable_mockModule("@actions/core", () => core);
+jest.unstable_mockModule("discord.js", () => discord);
 
 // The module being tested should be imported dynamically. This ensures that the
 // mocks are used in place of any actual dependencies.
 const { run, getDebugTestUrl } = await import("../src/main.js");
-const { EmbedBuilder, WebhookClient } = await import("discord.js");
 
 describe("main.js", () => {
   beforeEach(() => {

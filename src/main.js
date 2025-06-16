@@ -9,7 +9,7 @@ import os from "node:os";
 import path from "node:path";
 
 import * as core from "@actions/core";
-import * as github from "@actions/github";
+// import * as github from "@actions/github";
 
 import { EmbedBuilder, WebhookClient, MessageFlags } from "discord.js";
 
