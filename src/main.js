@@ -11,7 +11,7 @@ import path from "node:path";
 import * as core from "@actions/core";
 // import * as github from "@actions/github";
 
-import { EmbedBuilder, WebhookClient, MessageFlags } from "discord.js";
+import { EmbedBuilder, WebhookClient, MessageFlagsBitField } from "discord.js";
 
 import * as defaults from "./defaults";
 import { ensureDurationSinceLastRun, updateLockFileTime } from "./timelock";
@@ -42,18 +42,20 @@ export async function getDebugTestUrl() {
  */
 export async function run() {
   try {
-    var webhookUrl = core.getInput("webhookUrl").replace("/github", "");
-    if (webhookUrl === "useTestURL") {
-      webhookUrl = await getDebugTestUrl();
-      core.debug("Using local debug webhook in " + webhookUrl);
-    } else if (!webhookUrl) {
+    var webhookUrl = core.getInput("webhookUrl")
+    if (webhookUrl === undefined || !webhookUrl) {
       core.warning(
         "The webhookUrl was not provided. For security reasons the secret URL must be provided " +
           "in the action yaml using a context expression and can not be read as a default.\n" +
           "DISCORD NOTIFICATION NOT SENT"
       );
       return;
+    } else if (webhookUrl === "useTestURL") {
+      webhookUrl = await getDebugTestUrl();
+      core.debug("Using local debug webhook in " + webhookUrl);
     }
+    webhookUrl = webhookUrl.replace("/github", "");
+
 
     // goes in message
     const username = sanitizeUsername(
@@ -115,13 +117,13 @@ export async function run() {
     if (flags !== "") {
       msg["flags"] = 0;
       if (/SuppressNotifications/.test(flags)) {
-        msg["flags"] |= MessageFlags.SuppressNotifications;
+        msg["flags"] |= MessageFlagsBitField.Flags.SuppressNotifications;
       }
       if (/SuppressEmbeds/.test(flags)) {
-        msg["flags"] |= MessageFlags.SuppressEmbeds;
+        msg["flags"] |= MessageFlagsBitField.Message.Flags.SuppressEmbeds;
       }
-      if (/Loading/.test(flags)) {
-        msg["flags"] |= MessageFlags.Loading;
+      if (/IsComponentsV2/.test(flags)) {
+        msg["flags"] |= MessageFlagsBitField.Message.Flags.IsComponentsV2;
       }
     }
 

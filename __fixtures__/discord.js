@@ -3,5 +3,10 @@
  */
 import { jest } from "@jest/globals";
 
-export const EmbedBuilder = jest.fn();
-export const WebhookClient = jest.fn();
+export const mockSend = jest.fn();
+
+const mock = jest.fn().mockImplementation( () => {
+  return { send: mockSend };
+});
+
+export default mock;

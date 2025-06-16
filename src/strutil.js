@@ -37,6 +37,9 @@ export const sizeLimits = {
  */
 
 export function truncateStringIfNeeded(jStr) {
+  if (!jStr) {
+    return jStr;
+  }
   return truncateBytes(jStr, 2000);
 }
 
