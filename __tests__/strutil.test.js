@@ -2,7 +2,7 @@
  * Unit tests for strutil.js
  */
 import { jest } from "@jest/globals";
-import * as core from "../__fixtures__/core.js";
+import * as core from "../__fixtures__/actions/core.js";
 
 jest.unstable_mockModule("@actions/core", () => core);
 

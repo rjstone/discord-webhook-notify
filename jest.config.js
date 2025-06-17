@@ -14,6 +14,11 @@ const jestConfig = {
   testEnvironment: 'node',
   testMatch: ['**/*.test.js'],
   testPathIgnorePatterns: ['/dist/', '/node_modules/'],
+  // XXX
+  // extensionsToTreatAsEsm: [".js"],
+  //moduleNameMapper: {
+  //  '^(\\.{1,2}/.*)\\.js$': '$1',
+  //},
   // maxConcurrency is because we have synchronous blocking behavior to test
   // using the same lockfile.
   maxConcurrency: 1,
