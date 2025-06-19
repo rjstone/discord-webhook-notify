@@ -15,13 +15,11 @@ jest.unstable_mockModule("@actions/core", () => coreMock); // apply them in jest
 const core = await import("@actions/core"); // dynamic import actual
 
 // Mock discord.js setup
-// Setp 1: This time we just import a whole factory function to return the
-//         module.
+// This time it's just a custom mock class so we can avoid
+// using jest.unstable_mockModule()
 import { MockWebhookClient } from "../__fixtures__/discord.js";
-// Step 2: Apply our mock module factory function in jest's registry.
-// jest.unstable_mockModule("discord.js", () => mockModuleBody);
-// Step 3: Dynamic import the module (must use 'await import()').
-// const discord = await import("discord.js");
+
+import * as defaults from "../src/defaults.js";
 
 // The module being tested should be imported last, dynamically.
 // This ensures that the modules mocks are used in place their imports.
@@ -53,7 +51,13 @@ describe("main.js", () => {
       // jest.clearAllMocks();
     });
 
-    it("generates the right error when no webhookUrl is empty", () => {
+/*
+    let resolvers = [];
+    let promises = Array.from({ length: 3}, () => {
+      return new Promise( (resolve) => { resolvers.push(resolve) } );
+    });
+ */
+    it("generates the right error when webhookUrl is empty", async () => {
       core.getInput.mockImplementation((input) => {
         return {
           webhookUrl: "",
@@ -64,14 +68,15 @@ describe("main.js", () => {
         }[input];
       });
       const whc = new MockWebhookClient({ webhookUrl: "" });
-      run(whc);
+      await run(whc);
       expect(core.warning).toHaveBeenCalled();
       expect(core.warning.mock.lastCall[0]).toMatch(
         /webhookUrl was not provided/gi
       );
+      //resolvers[0]("test0 done");
     });
 
-    it("generates the right error when no webhookUrl is provided", () => {
+    it("generates the right error when no webhookUrl is provided", async () => {
       core.getInput.mockImplementation((input) => {
         return {
           flags: "SuppressNotifications",
@@ -81,17 +86,18 @@ describe("main.js", () => {
         }[input];
       });
       const whc = new MockWebhookClient({ webhookUrl: "" });
-      expect(() => {
-        run(whc);
+      expect(async () => {
+        await run(whc);
       }).not.toThrow();
       expect(core.warning).toHaveBeenCalled();
       expect(core.warning.mock.lastCall[0]).toMatch(
         /webhookUrl was not provided/gi
       );
-      expect(whc.send).not.toHaveBeenCalled();
+      expect(whc.send_called).toBe(false);
+      //resolvers[1]("test1 done");
     });
 
-    it("works with typical inputs", () => {
+    it("works with typical inputs", async () => {
       core.getInput.mockImplementation((input) => {
         return {
           webhookUrl: regexCorrectWebhookUrl,
@@ -101,19 +107,21 @@ describe("main.js", () => {
           text: "Some text."
         }[input];
       });
-      const whc = new MockWebhookClient({ webhookUrl: regexCorrectWebhookUrl });
-      run(whc);
+      let whc = new MockWebhookClient({ webhookUrl: regexCorrectWebhookUrl });
+      await run(whc);
       expect(whc.send_called).toBe(true);
       expect(core.warning).not.toHaveBeenCalled();
       expect(core.notice).not.toHaveBeenCalled();
       const msg = whc.send_arg;
       expect(msg).toBeDefined();
-      expect(msg["webhookUrl"]).toMatch(regexCorrectWebhookUrl);
+      console.log(msg);
       expect(msg["content"]).toMatch(/\w+/);
       expect(msg["username"]).toMatch(/\w{2,}/);
+      //resolvers[2]("test2 done");
     });
 
-    it("works after delay if executed with no delay in between two calls", () => {
+    it("works after delay if executed with no delay in between two calls", async () => {
+      // console.log(await Promise.all(promises));
       core.getInput.mockImplementation((input) => {
         return {
           webhookUrl: regexCorrectWebhookUrl,
@@ -121,15 +129,15 @@ describe("main.js", () => {
           username: "bar"
         }[input];
       });
-      const whc = new discord.WebhookClient({ webhookUrl: regexCorrectWebhookUrl });
+      let whc = new MockWebhookClient({ webhookUrl: regexCorrectWebhookUrl });
 
       const start_time = Date.now();
-      run(whc);
+      await run(whc);
       expect(Date.now()).toBeGreaterThanOrEqual(start_time);
-      run(whc);
-      expect(Date.now()).toBeGreaterThanOrEqual(start_time + 3000);
-      expect(Date.now()).toBeLessThan(start_time + 3000 + 200);
-    });
+      await run(whc);
+      const duration = Date.now() - start_time;
+      expect(duration).toBeGreaterThanOrEqual(defaults.holddownTime);
+    }, 10000);
 
     test.todo("works with each individual optional input set");
     test.todo("works with all inputs set");

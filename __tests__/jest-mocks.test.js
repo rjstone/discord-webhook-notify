@@ -28,13 +28,9 @@ jest.unstable_mockModule("@actions/core", () => coreMock);
 const core = await import("@actions/core"); // dynamic import actual module
 
 // Mock discord.js setup
-// Setp 1: This time we just import a whole factory function to return the
-//         module.
-import { mockModuleBody } from "../__fixtures__/discord.js";
-// Step 2: Apply our mock module factory function in jest's registry.
-jest.unstable_mockModule("discord.js", () => { return mockModuleBody });
-// Step 3: Dynamic import the module (must use 'await import()').
-const discord = await import("discord.js");
+// This time it's just a custom mock class so we can avoid
+// using jest.unstable_mockModule()
+import { MockWebhookClient } from "../__fixtures__/discord.js";
 
 // The module being tested should be imported last, dynamically.
 // This ensures that the mocks are used in place of any actual dependencies.
@@ -82,32 +78,21 @@ describe("mocking of", () => {
 
   describe("discord", () => {
     it("replaces WebhookClient constructor with mock", () => {
-      const whc = new discord.WebhookClient();
-      expect(whc.constructor.mock).toBeDefined();
+      const whc = new MockWebhookClient();
+      expect(whc.send_called).toBeDefined();
     });
     it("replaced WebhookClient.send with mock", () => {
-      const whc = new discord.WebhookClient();
-      expect(whc.send.mock).toBeDefined();
+      const whc = new MockWebhookClient();
+      expect(whc.send_called).toBeDefined();
     });
     it("works with 'new WebhookClient()'", () => {
-      const whc = new discord.WebhookClient();
-      expect(whc).toBeInstanceOf(Object);
+      const whc = new MockWebhookClient();
+      expect(whc).toBeInstanceOf(MockWebhookClient);
     });
     it("works with await send() call on WebhookClient instance", async () => {
-      const whc = new discord.WebhookClient({webhookUrl: "foo"});
+      const whc = new MockWebhookClient({webhookUrl: "foo"});
       await whc.send({ text: "foo" });
-      expect(whc.send).toHaveBeenCalled();
-    });
-    it("has un-mocked EmbedBuilder class", () => {
-      const eb = new discord.EmbedBuilder();
-      eb.setTitle("foo").setColor("#000000").setDescription("bar");
-      expect(eb.setTitle.mock).not.toBeDefined();
-      expect(eb.constructor.mock).not.toBeDefined();
-      expect(eb.length).toBeDefined();
-      expect(eb).toBeInstanceOf(discord.EmbedBuilder);
-    });
-    it("has un-mocked MessageFlagsBitField class", () => {
-      expect(discord.MessageFlagsBitField.mock).not.toBeDefined();
+      expect(whc.send_called).toBe(true);
     });
   });
 });

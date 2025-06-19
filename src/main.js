@@ -40,9 +40,11 @@ export async function getDebugTestUrl() {
  *
  * @returns { undefined }
  */
-export async function run(passedWebhookClient = null) {
+export async function run(mockedWebhookClient = null) {
+  let retval = {};
+
   try {
-    var webhookUrl = core.getInput("webhookUrl");
+    let webhookUrl = core.getInput("webhookUrl");
     if (typeof webhookUrl === "undefined" || !webhookUrl) {
       core.warning(
         "The webhookUrl was not provided. For security reasons the secret URL must be provided " +
@@ -75,15 +77,14 @@ export async function run(passedWebhookClient = null) {
     const color = core.getInput("color");
 
     let webhookClient;
-    if (passedWebhookClient) {
-      console.log("WARNING! Using passedWebhookClient which should be unit testing only");
-      webhookClient = passedWebhookClient;
+    if (mockedWebhookClient) {
+      console.log("WARNING: Using mockedWebhookClient (unit testing only)");
+      webhookClient = mockedWebhookClient;
     } else {
       webhookClient = new WebhookClient({ url: webhookUrl });
     }
 
-    var msg;
-
+    let msg;
     if (severity === "none") {
       msg = {
         username: username,
@@ -139,7 +140,8 @@ export async function run(passedWebhookClient = null) {
     await ensureDurationSinceLastRun(holddownTime);
 
 
-    console.log(webhookClient.send(msg));
+    await webhookClient.send(msg);
+    retval=webhookClient;
 
   } catch (error) {
     // not so sure the workflow should show an error just because the notification failed
@@ -148,4 +150,5 @@ export async function run(passedWebhookClient = null) {
   }
 
   await updateLockFileTime();
+  return retval;
 }
