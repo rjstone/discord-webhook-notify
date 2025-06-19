@@ -12,7 +12,7 @@ describe("strutil.js", () => {
   beforeEach(() => {});
 
   afterEach(() => {
-    jest.resetAllMocks();
+    jest.restoreAllMocks();
   });
 
   it("truncates long strings to 2000 characters", () => {

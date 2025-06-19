@@ -3,26 +3,48 @@
  */
 import { jest } from "@jest/globals";
 
-const discord = await import('discord.js');
+// const discord = await import("discord.js");
 
 // Partially mock the WebhookClient class
-export const mockSend = jest.fn();
-export const mockConstructor = jest.fn();
-export const mockWebhookClient = jest.fn().mockImplementation( () => {
-  return {
-    ...Object.getOwnPropertyDescriptors(discord.WebhookClient.prototype),
-    constructor: mockConstructor,
-    send: mockSend
-  };
+/* export const mockWCSend = jest.fn().mockImplementation( async (args) => {
+  console.log("mockWCSend() was called with " + args);
+  return args;
 });
+mockWCSend.mockName("mockWCSend");
 
-// A mock-returning factory method for
-// jest.unstable_mockModule(modulename, factoryFunc);
-export const discordMockFactory = () => {
-  return {
-    ...discord, // insert whole discord.js module
-    WebhookClient: mockWebhookClient // redefine only this
-  }; // return the whole adulterated discord.js module
+export const mockWCConstructor = jest.fn().mockImplementation ( (args) => {
+  console.log("mockWCConstructor() was called with " + args);
+  return args;
+})
+mockWCConstructor.mockName("WebhookClient.constructor"); */
+
+export const MockWebhookClient = class {
+  send_called = false;
+  send_arg = null;
+
+  constructor(arg) {
+    this.send_called = false;
+    this.send_arg = null;
+    console.log("MockWebhookClient constructor called with " + arg);
+  }
+  send(arg) {
+    this.send_called = true;
+    this.send_arg = arg
+    console.log("MockWebhookClient send() called with " + arg);
+    return arg;
+  }
 };
 
-export default discordMockFactory;
+/* MockWebhookClient.prototype.send = mockWCSend;
+jest.spyOn(MockWebhookClient.prototype, "constructor").mockImplementation( async (arg) => {
+  console.log("MOCK MockWebhookClient constructor() called with " + arg);
+  return arg;
+});
+ */
+/* export const mockModuleBody = {
+    WebhookClient: MockWebhookClient,
+    EmbedBuilder: discord.EmbedBuilder,
+    MessageFlagsBitField: discord.MessageFlagsBitField
+};
+
+export default mockModuleBody; */

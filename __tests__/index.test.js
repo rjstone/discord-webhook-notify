@@ -19,7 +19,7 @@ describe("index.js", () => {
   beforeEach(() => {});
 
   afterEach(() => {
-    jest.resetAllMocks();
+    jest.restoreAllMocks();
   });
 
   it("index.js will import", async () => {

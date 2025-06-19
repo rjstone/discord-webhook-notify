@@ -40,10 +40,10 @@ export async function getDebugTestUrl() {
  *
  * @returns { undefined }
  */
-export async function run() {
+export async function run(passedWebhookClient = null) {
   try {
-    var webhookUrl = core.getInput("webhookUrl")
-    if (webhookUrl === undefined || !webhookUrl) {
+    var webhookUrl = core.getInput("webhookUrl");
+    if (typeof webhookUrl === "undefined" || !webhookUrl) {
       core.warning(
         "The webhookUrl was not provided. For security reasons the secret URL must be provided " +
           "in the action yaml using a context expression and can not be read as a default.\n" +
@@ -56,7 +56,6 @@ export async function run() {
     }
     webhookUrl = webhookUrl.replace("/github", "");
 
-
     // goes in message
     const username = sanitizeUsername(
       core.getInput("username") || defaults.username
@@ -64,7 +63,7 @@ export async function run() {
     const avatarUrl =
       truncateStringIfNeeded(core.getInput("avatarUrl")) || defaults.avatarUrl;
     const text =
-      truncateStringIfNeeded(processIfNeeded(core.getInput("text"))) || "";
+      truncateStringIfNeeded(processIfNeeded(core.getInput("text") || "[Empty]" )) ;
     const flags = core.getInput("flags") || "";
 
     // goes in embed in message
@@ -75,7 +74,13 @@ export async function run() {
     const footer = core.getInput("footer") || "";
     const color = core.getInput("color");
 
-    const webhookClient = new WebhookClient({ url: webhookUrl });
+    let webhookClient;
+    if (passedWebhookClient) {
+      console.log("WARNING! Using passedWebhookClient which should be unit testing only");
+      webhookClient = passedWebhookClient;
+    } else {
+      webhookClient = new WebhookClient({ url: webhookUrl });
+    }
 
     var msg;
 
@@ -133,7 +138,9 @@ export async function run() {
 
     await ensureDurationSinceLastRun(holddownTime);
 
-    await webhookClient.send(msg);
+
+    console.log(webhookClient.send(msg));
+
   } catch (error) {
     // not so sure the workflow should show an error just because the notification failed
     core.notice(error.message);

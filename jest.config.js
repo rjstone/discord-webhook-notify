@@ -3,7 +3,7 @@
 /** @type {import('jest').Config} */
 
 const jestConfig = {
-  clearMocks: true,
+  // clearMocks: true,
   collectCoverage: true,
   collectCoverageFrom: ['./src/**'],
   coverageDirectory: './coverage',
@@ -14,14 +14,12 @@ const jestConfig = {
   testEnvironment: 'node',
   testMatch: ['**/*.test.js'],
   testPathIgnorePatterns: ['/dist/', '/node_modules/'],
-  // XXX
-  // extensionsToTreatAsEsm: [".js"],
-  //moduleNameMapper: {
-  //  '^(\\.{1,2}/.*)\\.js$': '$1',
-  //},
   // maxConcurrency is because we have synchronous blocking behavior to test
-  // using the same lockfile.
+  // using the same lockfile for all tests. This should really be set in a more
+  // surgical manner, but the tests don't take that long.
   maxConcurrency: 1,
+  // randomize: true,
+  transform: {},
   verbose: true
 }
 

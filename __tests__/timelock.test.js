@@ -22,12 +22,12 @@ describe("timelock.js", () => {
       }[input];
     });
     core.info.mockImplementation((msg) => {
-        return console.log("mock core.info:" + msg);
+        return msg;
     });
   });
 
   afterEach(() => {
-    jest.resetAllMocks();
+    jest.restoreAllMocks();
   });
 
   it("Delays executing again for 1000ms but not longer than 1500ms", async () => {
