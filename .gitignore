@@ -106,3 +106,4 @@ __tests__/runner/*
 
 # repl file
 SCRATCH*.js
+.vscode/settings.json
