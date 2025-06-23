@@ -1,4 +1,4 @@
-name: Simple Use Case Tests
+name: Simple Smoke Tests
 permissions: read-all
 on:
   push:
@@ -43,8 +43,8 @@ jobs:
       with:
         webhookUrl: ${{ secrets.DISCORD_WEBHOOK }}
         username: MacOS X Bot
-        text: Mac Bot seems to be having Problems or something.
-        severity: error
+        text: Mac Bot working.
+        severity: info
         color: '#ff00aa'
         description: This is a custom description.
         footer: This is a footer.

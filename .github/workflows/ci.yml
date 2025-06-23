@@ -40,8 +40,25 @@ jobs:
         id: npm-coverage
         run: npm run coverage
 
+      - name: Badge - CI Success
+        if: success()
+        uses: jaywcjlove/generated-badges@main
+        with:
+          label: "CI Status"
+          status: PASS
+          color: green
+          output: build/buildstatus.svg
+
+      - name: Badge - CI Failure
+        if: ${{ ! success() }}
+        uses: jaywcjlove/generated-badges@main
+        with:
+          label: "CI Status"
+          status: FAIL
+          output: build/buildstatus.svg
+
   test-action:
-    name: Action Test
+    name: Action Smoke Test
     runs-on: ubuntu-latest
 
     steps:
@@ -60,3 +77,4 @@ jobs:
       - name: Print Output
         id: output
         run: echo "${{ steps.test-action.outputs.time }}"
+
