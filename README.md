@@ -4,7 +4,7 @@ This sends a notification to discord using a webhook URL. It is written in JavaS
 
 ## Status
 
-Unit Tests: ![Coverage SVG](./badges/coverage.svg)
+![BuildStatus SVG](https://raw.githubusercontent.com/rjstone/discord-webhook-notify/refs/heads/gh-pages/buildstatus.svg) ![Coverage SVG](https://raw.githubusercontent.com/rjstone/discord-webhook-notify/refs/heads/gh-pages/coverage.svg)
 
 ## Setup Instructions
 
