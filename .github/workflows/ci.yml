@@ -45,23 +45,23 @@ jobs:
 
       - name: Badge - CI Success
         if: success()
-        uses: RubbaBoy/BYOB@v1.3
+        uses: RubbaBoy/BYOB@v1.3.0
         with:
-          NAME: ci_status
+          name: ci_status
           label: "CI Status"
           status: PASS
           color: 00cc00
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Badge - CI Failure
         if: ${{ ! success() }}
-        uses: RubbaBoy/BYOB@v1.3
+        uses: RubbaBoy/BYOB@v1.3.0
         with:
-          NAME: ci_status
+          name: ci_status
           label: "CI Status"
           status: FAIL
           color: aa0000
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
 
   test-action:
     name: Action Smoke Test
