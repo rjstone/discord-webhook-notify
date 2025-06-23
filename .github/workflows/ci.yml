@@ -45,27 +45,23 @@ jobs:
 
       - name: Badge - CI Success
         if: success()
-        uses: jaywcjlove/generated-badges@main
+        uses: RubbaBoy/BYOB@v1.3
         with:
+          NAME: ci_status
           label: "CI Status"
           status: PASS
-          color: green
-          output: badges/buildstatus.svg
+          color: 00cc00
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Badge - CI Failure
         if: ${{ ! success() }}
-        uses: jaywcjlove/generated-badges@main
+        uses: RubbaBoy/BYOB@v1.3
         with:
+          NAME: ci_status
           label: "CI Status"
           status: FAIL
-          output: badges/buildstatus.svg
-
-      - name: Deploy
-        uses: peaceiris/actions-gh-pages@v4
-        with:
-          commit_message: "${{ github.ref }}  Generate ./badges"
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: ./badges
+          color: aa0000
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   test-action:
     name: Action Smoke Test
