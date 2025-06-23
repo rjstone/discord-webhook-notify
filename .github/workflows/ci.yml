@@ -1,5 +1,8 @@
 name: Continuous Integration
-permissions: read-all
+permissions:
+  contents: write
+  pages: write
+
 on:
   pull_request:
     branches:
@@ -47,7 +50,7 @@ jobs:
           label: "CI Status"
           status: PASS
           color: green
-          output: build/buildstatus.svg
+          output: badges/buildstatus.svg
 
       - name: Badge - CI Failure
         if: ${{ ! success() }}
@@ -55,7 +58,7 @@ jobs:
         with:
           label: "CI Status"
           status: FAIL
-          output: build/buildstatus.svg
+          output: badges/buildstatus.svg
 
       - name: Deploy
         uses: peaceiris/actions-gh-pages@v4
