@@ -47,11 +47,6 @@ jobs:
       - run: echo "build_status_message=FAIL" >> $GITHUB_ENV
       - run: echo "build_status_color=9e1010" >> $GITHUB_ENV
 
-      - name: Create Orphan Branch for Badges If Needed
-        uses: action-badges/create-orphan-branch@0.1.1
-        with:
-          branch-name: badges
-
       - name: Setup Node.js
         id: setup-node
         uses: actions/setup-node@v4
@@ -76,17 +71,14 @@ jobs:
       - if: success()
         run: echo "build_status_color=209215" >> $GITHUB_ENV
 
-      - uses: action-badges/create-orphan-branch@0.1.1
-        with:
-          branch-name: ${{ env.BADGES_BRANCH }}
-
       - name: ⚙️ Generating coverage badges
         uses: jpb06/coverage-badges-action@latest
         with:
           branches: main,v2
           target-branch: ${{ env.BADGES_BRANCH }}
           badges-icon: jest
-          output-folder: ./cba
+          output-folder: ./.badges/${{ env.BRANCH_NAME }}
+          badges-labels-prefix: '${{ env.BADGES_BRANCH }} coverage:'
 
       - name: Ci Status Badge
         if: ${{ success() && env.BRANCH_NAME }}
