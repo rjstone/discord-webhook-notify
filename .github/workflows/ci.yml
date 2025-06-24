@@ -91,14 +91,6 @@ jobs:
           badges-icon: jest
           output-folder: ./cba
 
-      - name: Make license badge
-        uses: action-badges/package-json-badges@0.3.1
-        with:
-          file-name: 'package-license.svg'
-          badge-branch: ${{ env.BADGES_BRANCH }}
-          github-token: '${{ secrets.GITHUB_TOKEN }}'
-          integration: license
-
       - name: Ci Status Badge
         if: ${{ success() && env.BRANCH_NAME }}
         uses: action-badges/core@0.3.1
