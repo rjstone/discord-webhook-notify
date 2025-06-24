@@ -62,7 +62,11 @@ jobs:
         id: npm-ci-test
         run: npm run test
 
+      - id: mkdir-badges
+        run: mkdir badges
+
       - name: Coverage Badge
+        if: ${{ success() }}
         id: npm-coverage
         run: npm run coverage
 
@@ -85,6 +89,7 @@ jobs:
           status: FAIL
           color: aa0000
           github_token: ${{ secrets.GITHUB_TOKEN }}
+
 
   test-execution-of-src:
     name: src Smoke Test
