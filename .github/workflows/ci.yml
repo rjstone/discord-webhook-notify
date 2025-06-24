@@ -80,9 +80,6 @@ jobs:
         with:
           branch-name: ${{ env.BADGES_BRANCH }}
 
-      - name: ⬆️ Fetch badges branch
-        run: git fetch origin badges
-
       - name: ⚙️ Generating coverage badges
         uses: jpb06/coverage-badges-action@latest
         with:
@@ -103,9 +100,6 @@ jobs:
           badge-branch: ${{ env.BADGES_BRANCH }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
           style: flat-square
-
-      - name: ⬆️ Push badges branch
-        run: git push origin badges
 
   test-execution-of-src:
     name: src Smoke Test
