@@ -7,7 +7,7 @@ NodeJS.
 
 ## Status
 
-![CI Status main SVG](https://raw.githubusercontent.com/rjstone/discord-webhook-notify/refs/heads/badges/.badges/main/ci_status_main.svg) ![CI Status v2 SVG](https://raw.githubusercontent.com/rjstone/discord-webhook-notify/refs/heads/badges/.badges/v2/ci_status_v2.svg) ![Coverage SVG](https://raw.githubusercontent.com/rjstone/discord-webhook-notify/refs/heads/badges/cba/coverage-total.svg)
+![CI Status main SVG](https://raw.githubusercontent.com/rjstone/discord-webhook-notify/refs/heads/gh-pages/status_main.svg) ![CI Status v2 SVG](https://raw.githubusercontent.com/rjstone/discord-webhook-notify/refs/heads/gh-pages/status_v2.svg) ![Coverage main SVG](https://raw.githubusercontent.com/rjstone/discord-webhook-notify/refs/heads/gh-pages/coverage_main.svg) ![Coverage v2 SVG](https://raw.githubusercontent.com/rjstone/discord-webhook-notify/refs/heads/gh-pages/coverage_v2.svg)
 
 ## Setup Instructions
 
