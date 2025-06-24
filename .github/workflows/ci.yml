@@ -89,7 +89,7 @@ jobs:
           branches: main,v2
           target-branch: ${{ env.BADGES_BRANCH }}
           badges-icon: jest
-          output-folder: ./
+          output-folder: ./cba
 
       - name: Make license badge
         uses: action-badges/package-json-badges@0.3.1
