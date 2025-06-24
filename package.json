@@ -26,7 +26,7 @@
   },
   "scripts": {
     "test": "cross-env NODE_OPTIONS=--experimental-vm-modules NODE_NO_WARNINGS=1 npx jest",
-    "coverage": "npx make-coverage-badge --output-path ./badges/coverage.svg",
+    "test-ci": "cross-env NODE_OPTIONS=--experimental-vm-modules NODE_NO_WARNINGS=1 npx jest --ci --coverage",
     "lint": "npx eslint .",
     "local-action": "npx @github/local-action . src/main.js .env",
     "local-action-dist": "npx @github/local-action . dist/index.js .env",

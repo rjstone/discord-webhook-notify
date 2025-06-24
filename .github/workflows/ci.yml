@@ -28,6 +28,7 @@ on:
       - v2
 
 env:
+  BADGES_BRANCH: 'badges'
   REF_NAME: ${{ github.ref_name }}
   REF_TYPE: ${{ github.ref_type }}
   BRANCH_NAME: ${{ ( github.ref_type == 'branch' && github.ref_name ) || '' }}
@@ -42,6 +43,14 @@ jobs:
       - name: Checkout
         id: checkout
         uses: actions/checkout@v4
+
+      - run: echo "build_status_message=FAIL" >> $GITHUB_ENV
+      - run: echo "build_status_color=9e1010" >> $GITHUB_ENV
+
+      - name: Create Orphan Branch for Badges If Needed
+        uses: action-badges/create-orphan-branch@0.1.1
+        with:
+          branch-name: badges
 
       - name: Setup Node.js
         id: setup-node
@@ -59,37 +68,48 @@ jobs:
         run: npm run lint
 
       - name: Test
-        id: npm-ci-test
-        run: npm run test
+        id: npm-test-ci
+        run: npm run test-ci
 
-      - id: mkdir-badges
-        run: mkdir badges
+      - if: success()
+        run: echo "build_status_message=PASS" >> $GITHUB_ENV
+      - if: success()
+        run: echo "build_status_color=209215" >> $GITHUB_ENV
 
-      - name: Coverage Badge
-        if: ${{ success() }}
-        id: npm-coverage
-        run: npm run coverage
+      - uses: action-badges/create-orphan-branch@0.1.1
+        with:
+          branch-name: ${{ env.BADGES_BRANCH }}
 
-      - name: Badge - CI Success
+      - name: ⚙️ Generating coverage badges
+        uses: jpb06/coverage-badges-action@latest
+        with:
+          branches: master,v2
+          target-branch: ${{ env.BADGES_BRANCH }}
+          badges-icon: jest
+
+      - name: Make license badge
+        uses: action-badges/package-json-badges@0.3.1
+        with:
+          file-name: 'package-license.svg'
+          badge-branch: ${{ env.BADGES_BRANCH }}
+          github-token: '${{ secrets.GITHUB_TOKEN }}'
+          integration: license
+
+      - name: Ci Status Badge
         if: ${{ success() && env.BRANCH_NAME }}
-        uses: RubbaBoy/BYOB@v1.3.0
+        uses: action-badges/core@0.3.1
         with:
-          name: ci_status_${{ env.BRANCH_NAME }}
-          label: "CI Status ${{ env.BRANCH_NAME }}"
-          status: PASS
-          color: 00cc00
-          github_token: ${{ secrets.GITHUB_TOKEN }}
+          label: "CI Status (${{ env.BRANCH_NAME }})"
+          label-color: gray
+          message: 'PASS'
+          message-color: 209215
+          file-name: ci_status_${{ env.BRANCH_NAME }}.svg
+          badge-branch: ${{ env.BADGES_BRANCH }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          style: flat-square
 
-      - name: Badge - CI Failure
-        if: ${{ ( ! success() ) && env.BRANCH_NAME }}
-        uses: RubbaBoy/BYOB@v1.3.0
-        with:
-          name: ci_status_${{ env.BRANCH_NAME }}
-          label: "CI Status ${{ env.BRANCH_NAME }}"
-          status: FAIL
-          color: aa0000
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-
+      - name: ⬆️ Push badges branch
+        run: git push origin badges
 
   test-execution-of-src:
     name: src Smoke Test
