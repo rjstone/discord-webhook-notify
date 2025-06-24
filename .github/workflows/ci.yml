@@ -4,12 +4,35 @@ permissions:
   pages: write
 
 on:
-  pull_request:
-    branches:
-      - main
   push:
     branches:
       - main
+      - v2
+    paths:
+      - .github/workflows/ci.yml
+      - __fixtures__/
+      - __tests__/
+      - src/
+      - .node-version
+      - .prettierrc
+      - .yaml-lint.yml
+      - test.env
+      - jest.config.js
+      - package.json
+      - package-lock.json
+      - eslint.config.mjs
+      - action.yml
+  pull_request:
+    branches:
+      - main
+      - v2
+
+env:
+  REF_NAME: ${{ github.ref_name }}
+  REF_TYPE: ${{ github.ref_type }}
+  BRANCH_NAME: ${{ ( github.ref_type == 'branch' && github.ref_name ) || '' }}
+  TAG_NAME: ${{ ( github.ref_type == 'tag' && github.ref_name ) || '' }}
+
 jobs:
   test-javascript:
     name: Unit Tests (jest)
@@ -44,27 +67,27 @@ jobs:
         run: npm run coverage
 
       - name: Badge - CI Success
-        if: success()
+        if: ${{ success() && env.BRANCH_NAME }}
         uses: RubbaBoy/BYOB@v1.3.0
         with:
-          name: ci_status
-          label: "CI Status"
+          name: ci_status_${{ env.BRANCH_NAME }}
+          label: "CI Status ${{ env.BRANCH_NAME }}"
           status: PASS
           color: 00cc00
           github_token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Badge - CI Failure
-        if: ${{ ! success() }}
+        if: ${{ ( ! success() ) && env.BRANCH_NAME }}
         uses: RubbaBoy/BYOB@v1.3.0
         with:
-          name: ci_status
-          label: "CI Status"
+          name: ci_status_${{ env.BRANCH_NAME }}
+          label: "CI Status ${{ env.BRANCH_NAME }}"
           status: FAIL
           color: aa0000
           github_token: ${{ secrets.GITHUB_TOKEN }}
 
-  test-action:
-    name: Action Smoke Test
+  test-execution-of-src:
+    name: src Smoke Test
     runs-on: ubuntu-latest
 
     steps:
@@ -79,7 +102,8 @@ jobs:
           webhookUrl: ${{ secrets.DISCORD_WEBHOOK }}
           username: "CI Test"
           severity: "info"
+          flags: SuppressNotifications
 
       - name: Print Output
         id: output
-        run: echo "${{ steps.test-action.outputs.time }}"
+        run: echo "OUTPUT\n${{ steps.test-action.outputs }}"

@@ -1,9 +1,15 @@
-name: Simple Smoke Tests
+name: dist Smoke Tests
 permissions: read-all
 on:
   push:
     branches:
       - main
+      - v2
+    paths:
+      - .github/workflows/test.yml
+      - dist
+      - action.yml
+
 jobs:
   windows_test:
     runs-on: windows-latest
@@ -15,6 +21,8 @@ jobs:
         webhookUrl: ${{ secrets.DISCORD_WEBHOOK }}
         username: Windows Bot
         text: This is some text. **Workflow:** ${{ github.workflow }}
+        flags: SuppressNotifications
+
     - name: Windows Test Default Embed
       uses: rjstone/discord-webhook-notify@main
       with:
@@ -22,6 +30,8 @@ jobs:
         username: Windows Bot
         text: This is a generic warning. **Workflow:** ${{ github.workflow }}
         severity: warn
+        flags: SuppressNotifications
+
   linux_test:
     runs-on: ubuntu-latest
     name: Linux Test Job
@@ -34,6 +44,8 @@ jobs:
         text: This is some generic info you might want to see.
         severity: info
         details: 'Custom details: Somebody set up us the bomb.'
+        flags: SuppressNotifications
+
   macos_test:
     runs-on: macos-latest
     name: MacOS Test Job
@@ -48,3 +60,4 @@ jobs:
         color: '#ff00aa'
         description: This is a custom description.
         footer: This is a footer.
+        flags: SuppressNotifications
