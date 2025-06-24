@@ -46,6 +46,7 @@
     "@rollup/plugin-commonjs": "^28.0.6",
     "@rollup/plugin-json": "^6.1.0",
     "@rollup/plugin-node-resolve": "^16.0.1",
+    "badge-maker": "^5.0.2",
     "cross-env": "^7.0.3",
     "eslint": "^9.28.0",
     "eslint-config-prettier": "^10.1.5",
@@ -54,6 +55,7 @@
     "eslint-plugin-prettier": "^5.5.0",
     "jest": "^30.0.2",
     "make-coverage-badge": "^1.2.0",
+    "npm": "^11.4.2",
     "prettier": "^3.6.0",
     "prettier-eslint": "^16.4.2",
     "rollup": "^4.44.0"

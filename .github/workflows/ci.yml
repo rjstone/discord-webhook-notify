@@ -71,27 +71,18 @@ jobs:
       - if: success()
         run: echo "build_status_color=209215" >> $GITHUB_ENV
 
-      - name: ⚙️ Generating coverage badges
-        uses: jpb06/coverage-badges-action@latest
-        with:
-          branches: main,v2
-          target-branch: ${{ env.BADGES_BRANCH }}
-          badges-icon: jest
-          output-folder: ./.badges_${{ env.BRANCH_NAME }}
-          badges-labels-prefix: '${{ env.BADGES_BRANCH }} coverage:'
+      - id: make-badges-dir
+        run: mkdir badges
+      - id: make-coverage-badge
+        run: npx make-coverage-badge --output-path badges/coverage_${{ env.BRANCH_NAME }}.svg
+      - id: make-badges-buildstatus
+        run: npx badge 'CI Status (${{ env.BRANCH_NAME }})' '${{ env.build_status_message }}' '#${{ env.build_status_color }}' grey @plastic > badges/status_${{ env.BRANCH_NAME }}.svg
 
-      - name: Ci Status Badge
-        if: ${{ success() && env.BRANCH_NAME }}
-        uses: action-badges/core@0.3.1
+      - name: Github Pages Deploy
+        uses: peaceiris/actions-gh-pages@v4.0.0
         with:
-          label: "CI Status (${{ env.BRANCH_NAME }})"
-          label-color: gray
-          message: 'PASS'
-          message-color: 209215
-          file-name: ./.badges_${{ env.BRANCH_NAME }}/ci_status.svg
-          badge-branch: ${{ env.BADGES_BRANCH }}
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          style: flat-square
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./badges
 
   test-execution-of-src:
     name: src Smoke Test
