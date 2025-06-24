@@ -80,10 +80,13 @@ jobs:
         with:
           branch-name: ${{ env.BADGES_BRANCH }}
 
+      - name: ⬆️ Fetch badges branch
+        run: git fetch origin badges
+
       - name: ⚙️ Generating coverage badges
         uses: jpb06/coverage-badges-action@latest
         with:
-          branches: master,v2
+          branches: main,v2
           target-branch: ${{ env.BADGES_BRANCH }}
           badges-icon: jest
 
