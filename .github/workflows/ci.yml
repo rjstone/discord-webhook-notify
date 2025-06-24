@@ -77,7 +77,7 @@ jobs:
           branches: main,v2
           target-branch: ${{ env.BADGES_BRANCH }}
           badges-icon: jest
-          output-folder: ./.badges/${{ env.BRANCH_NAME }}
+          output-folder: ./.badges_${{ env.BRANCH_NAME }}
           badges-labels-prefix: '${{ env.BADGES_BRANCH }} coverage:'
 
       - name: Ci Status Badge
@@ -88,7 +88,7 @@ jobs:
           label-color: gray
           message: 'PASS'
           message-color: 209215
-          file-name: ci_status_${{ env.BRANCH_NAME }}.svg
+          file-name: ./.badges_${{ env.BRANCH_NAME }}/ci_status.svg
           badge-branch: ${{ env.BADGES_BRANCH }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
           style: flat-square
