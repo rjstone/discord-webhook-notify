@@ -28,11 +28,10 @@ export const longSeverity = {
  */
 export async function getDefaultDescription() {
   const context = github.context;
-  // TODO: We could switch on context.eventName to print different stuff for different event types
   return (
-    `- **Repository:** [${context.repository}](${context.repositoryUrl})\n` +
+    `- **Repository:** [${github.repository}](${github.repositoryUrl})\n` +
     `- **Workflow:** ${context.workflow}\n` +
     `- **Event:** ${context.eventName}\n` +
-    `- **Triggering Actor:** ${context.triggering_actor}\n`
+    `- **Triggering Actor:** ${github.triggering_actor}\n`
   );
 }

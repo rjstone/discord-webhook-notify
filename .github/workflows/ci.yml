@@ -74,8 +74,10 @@ jobs:
       - id: make-badges-dir
         run: mkdir badges
       - id: make-coverage-badge
+        if: ${{ env.BRANCH_NAME }} == "main" || ${{ env.BRANCH_NAME }} == "v2"
         run: npx make-coverage-badge --output-path badges/coverage_${{ env.BRANCH_NAME }}.svg
       - id: make-badges-buildstatus
+        if: ${{ env.BRANCH_NAME }} == "main" || ${{ env.BRANCH_NAME }} == "v2"
         run: npx badge 'CI Status (${{ env.BRANCH_NAME }})' '${{ env.build_status_message }}' '#${{ env.build_status_color }}' grey @plastic > badges/status_${{ env.BRANCH_NAME }}.svg
 
       - name: Github Pages Deploy
