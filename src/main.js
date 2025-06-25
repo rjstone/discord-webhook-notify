@@ -41,8 +41,6 @@ export async function getDebugTestUrl() {
  * @returns { undefined }
  */
 export async function run(mockedWebhookClient = null) {
-  let retval = {};
-
   try {
     let webhookUrl = core.getInput("webhookUrl");
     if (typeof webhookUrl === "undefined" || !webhookUrl) {
@@ -65,7 +63,7 @@ export async function run(mockedWebhookClient = null) {
     const avatarUrl =
       truncateStringIfNeeded(core.getInput("avatarUrl")) || defaults.avatarUrl;
     const text =
-      truncateStringIfNeeded(processIfNeeded(core.getInput("text") || "[Empty]" )) ;
+      truncateStringIfNeeded(processIfNeeded(core.getInput("text") || "" )) ;
     const flags = core.getInput("flags") || "";
 
     // goes in embed in message
@@ -88,8 +86,7 @@ export async function run(mockedWebhookClient = null) {
     if (severity === "none") {
       msg = {
         username: username,
-        avatarURL: avatarUrl,
-        content: text
+        avatarURL: avatarUrl
       };
     } else {
       const embed = new EmbedBuilder()
@@ -115,10 +112,11 @@ export async function run(mockedWebhookClient = null) {
       msg = {
         username: username,
         avatarURL: avatarUrl,
-        content: text,
         embeds: [embed]
       };
     }
+
+    if (text) msg['content'] = text;
 
     if (flags !== "") {
       msg["flags"] = 0;
@@ -141,7 +139,6 @@ export async function run(mockedWebhookClient = null) {
 
 
     await webhookClient.send(msg);
-    retval=webhookClient;
 
   } catch (error) {
     // not so sure the workflow should show an error just because the notification failed
@@ -150,5 +147,5 @@ export async function run(mockedWebhookClient = null) {
   }
 
   await updateLockFileTime();
-  return retval;
+  return;
 }
