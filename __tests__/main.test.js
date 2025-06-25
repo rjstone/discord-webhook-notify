@@ -120,6 +120,29 @@ describe("main.js", () => {
       //resolvers[2]("test2 done");
     });
 
+    test.todo("works with each individual optional input set");
+    test.todo("works with all inputs set");
+    test.todo("uses the configured holddownTime delay if set");
+
+    it("leaves the message text out if it is empty but there is an embed", async () => {
+      core.getInput.mockImplementation((input) => {
+        return {
+          webhookUrl: regexCorrectWebhookUrl,
+          severity: "info",
+          description: "this is some info"
+        }[input];
+      });
+      let whc = new MockWebhookClient({ webhookUrl: regexCorrectWebhookUrl });
+
+      await run(whc);
+      expect(whc.send_called).toBe(true);
+      expect(whc.send_arg.text).not.toBeDefined();
+      expect(whc.send_arg.embeds).toBeDefined();
+      expect(whc.send_arg.embeds[0].data.title).toMatch("Informational");
+      expect(whc.send_arg.embeds[0].data.description).toMatch("this is some info");
+    });
+
+
     it("works after delay if executed with no delay in between two calls", async () => {
       // console.log(await Promise.all(promises));
       core.getInput.mockImplementation((input) => {
@@ -139,8 +162,5 @@ describe("main.js", () => {
       expect(duration).toBeGreaterThanOrEqual(defaults.holddownTime);
     }, 10000);
 
-    test.todo("works with each individual optional input set");
-    test.todo("works with all inputs set");
-    test.todo("uses the configured holddownTime delay if set");
   });
 });
