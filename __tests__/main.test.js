@@ -44,6 +44,19 @@ describe("main.js", () => {
     expect(getDebugTestUrl).toBeInstanceOf(Function);
   });
 
+  it("getDebugTestUrl can be called", async () => {
+    let url;
+    try {
+      url = await getDebugTestUrl();
+    } catch (e) {
+      expect(e.code).toEqual("ENOENT");
+      console.log("Test URL doesn't exist but that's OK.")
+      return;
+    }
+    expect(url).toMatch(/http/);
+    console.log("Test URL: " + url)
+  });
+
   describe("run", () => {
     beforeEach(() => {
     });
