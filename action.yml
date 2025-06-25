@@ -41,6 +41,9 @@ inputs:
   title:
     description: Title for the embed. Defaults to severity long terminology.
     required: false
+  thumbnailUrl:
+    description: A URL to a thumbnail for the embed. Default is no image.
+    required: false
   description:
     description: Embed notification message. Default provides some minimal github.context workflow info.
     required: false
@@ -52,6 +55,22 @@ inputs:
   footer:
     description: Footer for the embed. Defaults to long terminology severity.
     required: false
+  embeds:
+    description: >
+      (EXPERIMENTAL) A YAML or JSON STRING containing RAW embeds. This will let you do anything but it will get passed directly
+      through to the Discord API without any checks, so you have to know what you're doing with it.
+      Note that because of limitations on the Actions API, this must be a STRING containing the YAML or JSON.
+      Use "|" to preserve whitespace if passing YAML. See https://discord.com/developers/docs/resources/message#embed-object
+    required: false
+    default: ""
+  components:
+    description: >
+      (EXPERIMENTAL) A YAML or JSON STRING containing RAW message components. This will get passed directly through to the
+      Discord API with no checks, so you have to know what you're doing. Not all components are available in
+      webhook messages (since there is no bot/app on the other end). See https://discord.com/developers/docs/components/using-message-components
+      Use "|" to preserve whitespace if passing YAML. Note this is a STRING containing YAML or JSON.
+    required: false
+    default: ""
   processingOptions:
     description: >
       (EXPERIMENTAL) Set to "percentDecode" if you want some inputs that are
@@ -72,7 +91,6 @@ inputs:
       The directory where the lockfile used for saving last run time is stored.
     required: false
     default: "."
-
 
 runs:
   using: "node20"
