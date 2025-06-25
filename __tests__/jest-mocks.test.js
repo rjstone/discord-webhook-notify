@@ -65,7 +65,6 @@ describe("mocking of", () => {
       const theOnlyAcceptableReturn =
         "return should only be this exact object.";
       core.getInput.mockImplementation((input) => {
-        console.log("getInput(" + input + ")");
         return theOnlyAcceptableReturn;
       });
       const mockOutput = core.getInput(ignoredArg);

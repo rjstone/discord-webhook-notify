@@ -64,12 +64,24 @@ describe("main.js", () => {
       // jest.clearAllMocks();
     });
 
-/*
-    let resolvers = [];
-    let promises = Array.from({ length: 3}, () => {
-      return new Promise( (resolve) => { resolvers.push(resolve) } );
+    it("recognizes webhookUrl == 'useTestURL'", async () => {
+      core.getInput.mockImplementation((input) => {
+        return {
+          webhookUrl: "useTestURL",
+          text: "content"
+        }[input];
+      });
+        let whc = new MockWebhookClient({ webhookUrl: regexCorrectWebhookUrl });
+        try {
+          await run(whc);
+        } catch (e) {
+          expect(e.code).toEqual("ENOINT");
+          return;
+        }
+        expect(whc.send_called).toBe(true);
+        expect(whc.send_arg.content).toMatch(/content/);
     });
- */
+
     it("generates the right error when webhookUrl is empty", async () => {
       core.getInput.mockImplementation((input) => {
         return {
@@ -89,7 +101,7 @@ describe("main.js", () => {
       //resolvers[0]("test0 done");
     });
 
-    it("generates the right error when no webhookUrl is provided", async () => {
+    it("generates the right error when webhookUrl is undefined", async () => {
       core.getInput.mockImplementation((input) => {
         return {
           flags: "SuppressNotifications",
@@ -110,14 +122,16 @@ describe("main.js", () => {
       //resolvers[1]("test1 done");
     });
 
-    it("works with typical inputs", async () => {
+    it("works with typical inputs and all valid flags", async () => {
       core.getInput.mockImplementation((input) => {
         return {
           webhookUrl: regexCorrectWebhookUrl,
-          flags: "SuppressNotifications",
+          flags: "SuppressNotifications SuppressEmbeds IsComponentsV2",
           username: "Silent Bob",
           avatarUrl: "http://my.foot",
-          text: "Some text."
+          text: "Some text.",
+          severity: "error",
+          details: "This is a description"
         }[input];
       });
       let whc = new MockWebhookClient({ webhookUrl: regexCorrectWebhookUrl });
@@ -127,11 +141,47 @@ describe("main.js", () => {
       expect(core.notice).not.toHaveBeenCalled();
       const msg = whc.send_arg;
       expect(msg).toBeDefined();
-      console.log(msg);
       expect(msg["content"]).toMatch(/\w+/);
       expect(msg["username"]).toMatch(/\w{2,}/);
       //resolvers[2]("test2 done");
     });
+
+    it("catches webhook send errors and logs a message", async () => {
+      core.getInput.mockImplementation((input) => {
+        return {
+          webhookUrl: regexCorrectWebhookUrl,
+          username: "Silent Bob",
+          avatarUrl: "http://my.foot",
+          text: "Some text."
+        }[input];
+      });
+      let whc = new MockWebhookClient({ webhookUrl: regexCorrectWebhookUrl });
+      whc.send = function () {
+        throw new Error();
+      }
+      await run(whc)
+      expect(core.notice).toHaveBeenCalled();
+    });
+
+    it("ignores nonexistant flags and doesn't error", async () => {
+      core.getInput.mockImplementation((input) => {
+        return {
+          webhookUrl: regexCorrectWebhookUrl,
+          flags: "NonExistantFlag",
+          text: "Some text."
+        }[input];
+      });
+      let whc = new MockWebhookClient({ webhookUrl: regexCorrectWebhookUrl });
+      let err = false;
+      try {
+        await run(whc);
+      } catch(e) {
+        err = true;
+      }
+      expect(err).toBe(false);
+      expect(whc.send_called).toBe(true);
+
+    })
 
     test.todo("works with each individual optional input set");
     test.todo("works with all inputs set");
