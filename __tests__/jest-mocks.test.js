@@ -64,7 +64,7 @@ describe("mocking of", () => {
       const ignoredArg = "this arg doesn't matter but should be identifiable";
       const theOnlyAcceptableReturn =
         "return should only be this exact object.";
-      core.getInput.mockImplementation((input) => {
+      core.getInput.mockImplementation(() => {
         return theOnlyAcceptableReturn;
       });
       const mockOutput = core.getInput(ignoredArg);

@@ -54,7 +54,8 @@ export default defineConfig([
       "import/no-namespace": "off",
       "no-console": "off",
       "no-shadow": "off",
-      "no-unused-vars": "warn"
+      "no-unused-vars": "warn",
+      "jest/no-conditional-expect": "warn"
     }
   }
 ]);

@@ -175,7 +175,7 @@ describe("main.js", () => {
       let err = false;
       try {
         await run(whc);
-      } catch(e) {
+      } catch {
         err = true;
       }
       expect(err).toBe(false);
