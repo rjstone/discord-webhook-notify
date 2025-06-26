@@ -9,9 +9,9 @@ import os from "node:os";
 import path from "node:path";
 
 import * as core from "@actions/core";
-// import * as github from "@actions/github";
 
 import { EmbedBuilder, WebhookClient, MessageFlagsBitField } from "discord.js";
+import YAML from 'yaml';
 
 import * as defaults from "./defaults";
 import { ensureDurationSinceLastRun, updateLockFileTime } from "./timelock";
@@ -62,11 +62,17 @@ export async function run(mockedWebhookClient = null) {
     );
     const avatarUrl =
       truncateStringIfNeeded(core.getInput("avatarUrl")) || defaults.avatarUrl;
-    const text =
-      truncateStringIfNeeded(processIfNeeded(core.getInput("text") || "" )) ;
+    // I'm unsure why this wasn't always called content.
+    // API change? Bad naming in previous module?
+    if (core.getInput("content") && core.getInput("text")) {
+      core.warning("both 'content' and 'text' are set. 'text' will be ignored.");
+    }
+    const textOrContent = core.getInput("content") || core.getInput("text") || "";
+    const content = truncateStringIfNeeded(processIfNeeded(textOrContent));
+
     const flags = core.getInput("flags") || "";
 
-    // goes in embed in message
+    // The "easy" embed fields.
     const severity = core.getInput("severity") || "none";
     const title = core.getInput("title") || "";
     const description = core.getInput("description") || "";
@@ -76,22 +82,34 @@ export async function run(mockedWebhookClient = null) {
     const thumbnailUrl = core.getInput("thumbnailUrl");
     const imageUrl = core.getInput("imageUrl");
 
-    let webhookClient;
-    /* istanbul ignore next */
-    if (mockedWebhookClient) {
-      console.log("WARNING: Using mockedWebhookClient (unit testing only)");
-      webhookClient = mockedWebhookClient;
-    } else {
-      webhookClient = new WebhookClient({ url: webhookUrl });
+    // full pass-through for JSON/YAML embeds.
+    // The input should be a string containing a JSON or YAML array.
+    let embedsMaybeJSONYAML = core.getInput("embeds");
+    let embeds = [];
+    if (embedsMaybeJSONYAML) {
+      let failed = false;
+      try {
+        embeds = JSON.parse(embedsMaybeJSONYAML);
+      } catch {
+        failed = true;
+      }
+      if (failed) {
+        failed = false;
+        try {
+          embeds = YAML.parse(embedsMaybeJSONYAML);
+        } catch {
+          failed = true;
+        }
+      }
+      if (failed) {
+        core.warning("embeds is non-empty but couldn't be parsed as JSON or YAML");
+      }
     }
 
-    let msg;
-    if (severity === "none") {
-      msg = {
-        username: username,
-        avatarURL: avatarUrl
-      };
-    } else {
+    /**
+     * Build the "easy embed" if needed.
+     */
+    if (severity !== "none") {
       const embed = new EmbedBuilder()
         .setTitle(
           truncateStringIfNeeded(title) || defaults.longSeverity[severity]
@@ -118,15 +136,23 @@ export async function run(mockedWebhookClient = null) {
       if (imageUrl) {
         embed.setImage(imageUrl);
       }
-      msg = {
-        username: username,
-        avatarURL: avatarUrl,
-        embeds: [embed]
-      };
+      // the "easy embed" will get prepended to the list if it exists.
+      embeds = [ embed ].concat(embeds);
     }
 
-    if (text) msg['content'] = text;
+    if (embeds.length > 10) {
+      core.warning("embeds array is longer than allowed limit 10. Truncating to 10.");
+      embeds = embeds.slice(0,10);
+    }
 
+    /**
+     * Compose Message
+     */
+    const msg = {
+        username: username,
+        avatarURL: avatarUrl
+      };
+    if (content) msg['content'] = content;
     if (flags !== "") {
       msg["flags"] = 0;
       if (/SuppressNotifications/.test(flags)) {
@@ -139,14 +165,25 @@ export async function run(mockedWebhookClient = null) {
         msg["flags"] |= MessageFlagsBitField.Flags.IsComponentsV2;
       }
     }
+    // Add embeds if there are any.
+    if (embeds) {
+      msg['embeds'] = embeds;
+    }
+
+    let webhookClient;
+    /* istanbul ignore next */
+    if (mockedWebhookClient) {
+      console.log("WARNING: Using mockedWebhookClient (unit testing only)");
+      webhookClient = mockedWebhookClient;
+    } else {
+      webhookClient = new WebhookClient({ url: webhookUrl });
+    }
 
     const holddownTime =
       Number.parseInt(core.getInput("holddownTime"), 10) ||
       defaults.holddownTime;
 
     await ensureDurationSinceLastRun(holddownTime);
-
-
     await webhookClient.send(msg);
 
   } catch (error) {

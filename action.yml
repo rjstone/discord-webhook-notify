@@ -26,13 +26,20 @@ inputs:
       May not work depending on Discord policy.
     required: false
     default: https://github.githubassets.com/images/modules/logos_page/GitHub-Mark.png
+  content:
+    description: Text to be sent as normal Discord markdown text, as if a user had typed it. Defaults to empty string.
+    required: false
   text:
-    description: Text to be sent as normal text above the embed. Defaults to empty string.
+    description: >
+      This is an alias for 'content' for backward compatability. The Discord API calls this 'content',
+      but for unknown reasons 'text' was used in the past. If both 'text' and 'content' are set then
+      'content' will be used and 'text' will be ignored.
     required: false
   severity:
     description: >
       Severity level - info, warn, error, or none. Using "none" will cause no embed to be added.
       Using any other value will cause an embed with a set of matching defaults to be added.
+      Defaults to "none" (no automatic embed created).
     required: false
     default: none
   color:
