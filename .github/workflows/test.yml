@@ -15,6 +15,13 @@ jobs:
     runs-on: windows-latest
     name: Windows Test Job
     steps:
+    - name: checkout
+      uses: actions/checkout@v4
+      with:
+        sparse-checkout: |
+          dist
+          action.yaml
+
     - name: Windows Test No Embed
       uses: rjstone/discord-webhook-notify@main
       with:
@@ -36,6 +43,12 @@ jobs:
     runs-on: ubuntu-latest
     name: Linux Test Job
     steps:
+    - name: checkout
+      uses: actions/checkout@v4
+      with:
+        sparse-checkout: |
+          dist
+          action.yaml
     - name: Linux Test Custom
       uses: rjstone/discord-webhook-notify@main
       with:
@@ -50,6 +63,12 @@ jobs:
     runs-on: macos-latest
     name: MacOS Test Job
     steps:
+    - name: checkout
+      uses: actions/checkout@v4
+      with:
+        sparse-checkout: |
+          dist
+          action.yaml
     - name: MacOS Test Custom
       uses: rjstone/discord-webhook-notify@main
       with:
