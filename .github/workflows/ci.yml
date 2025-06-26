@@ -75,6 +75,7 @@ jobs:
 
       - id: make-badges-dir
         run: mkdir badges
+        if: always()
       - id: make-coverage-badge
         if: ${{ always() && (env.BRANCH_NAME == 'main' || env.BRANCH_NAME == 'v2') }}
         run: npx make-coverage-badge --output-path badges/coverage_${{ env.BRANCH_NAME }}.svg
