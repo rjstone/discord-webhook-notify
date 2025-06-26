@@ -24,7 +24,7 @@ jobs:
           action.yaml
 
     - name: Windows Test No Embed
-      uses: ./dist
+      uses: ./
       with:
         webhookUrl: ${{ secrets.DISCORD_WEBHOOK }}
         username: Windows Bot
@@ -32,7 +32,7 @@ jobs:
         flags: SuppressNotifications
 
     - name: Windows Test Default Embed
-      uses: ./dist
+      uses: ./
       with:
         webhookUrl: ${{ secrets.DISCORD_WEBHOOK }}
         username: Windows Bot
@@ -51,7 +51,7 @@ jobs:
           dist
           action.yaml
     - name: Linux Test Custom
-      uses: ./dist
+      uses: ./
       with:
         webhookUrl: ${{ secrets.DISCORD_WEBHOOK }}
         username: Linux Bot
@@ -71,7 +71,7 @@ jobs:
           dist
           action.yaml
     - name: MacOS Test Custom
-      uses: ./dist
+      uses: ./
       with:
         webhookUrl: ${{ secrets.DISCORD_WEBHOOK }}
         username: MacOS X Bot
@@ -93,7 +93,7 @@ jobs:
           dist
           action.yaml
     - name: YAML Embeds
-      uses: ./dist
+      uses: ./
       with:
         webhookUrl: ${{ secrets.DISCORD_WEBHOOK }}
         username: YAML Embeds
