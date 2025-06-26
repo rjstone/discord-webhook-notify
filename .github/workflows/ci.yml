@@ -10,9 +10,9 @@ on:
       - v2
     paths:
       - .github/workflows/ci.yml
-      - __fixtures__/
-      - __tests__/
-      - src/
+      - __fixtures__/**
+      - __tests__/**
+      - src/**
       - .node-version
       - .prettierrc
       - .yaml-lint.yml
@@ -90,6 +90,7 @@ jobs:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_dir: ./badges
           keep_files: true
+
 
   test-execution-of-src:
     name: src Smoke Test
