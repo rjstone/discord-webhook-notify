@@ -232,6 +232,25 @@ describe("main.js", () => {
       expect(duration).toBeGreaterThanOrEqual(defaults.holddownTime);
     }, 10000);
 
+    it("adds imageUrl and thumbnailUrl to the embed", async () => {
+      core.getInput.mockImplementation((input) => {
+        return {
+          webhookUrl: regexCorrectWebhookUrl,
+          severity: "info",
+          thumbnailUrl: "http://thumb.url",
+          imageUrl: "http://image.url"
+        }[input];
+      });
+      let whc = new MockWebhookClient({ webhookUrl: regexCorrectWebhookUrl });
+
+      await run(whc);
+      expect(whc.send_called).toBe(true);
+      expect(whc.send_arg.text).not.toBeDefined();
+      expect(whc.send_arg.embeds).toBeDefined();
+      expect(whc.send_arg.embeds[0].data.thumbnail.url).toMatch(/thumb/);
+      expect(whc.send_arg.embeds[0].data.image.url).toMatch(/image/);
+    });
+
     test.todo("works with each individual optional input set");
     test.todo("works with all inputs set");
     test.todo("uses the configured holddownTime delay if set");

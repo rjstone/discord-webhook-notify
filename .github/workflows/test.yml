@@ -5,6 +5,7 @@ on:
     branches:
       - main
       - v2
+      - "feat-*"
     paths:
       - .github/workflows/test.yml
       - dist

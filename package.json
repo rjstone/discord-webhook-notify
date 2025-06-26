@@ -37,7 +37,8 @@
     "@actions/core": "^1.2.6",
     "@actions/github": "^6.0.1",
     "discord.js": "^14.19.3",
-    "multibyte": "^1.0.4"
+    "multibyte": "^1.0.4",
+    "yaml": "^2.8.0"
   },
   "devDependencies": {
     "@eslint/compat": "^1.3.0",
