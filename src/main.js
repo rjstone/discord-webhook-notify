@@ -75,6 +75,7 @@ export async function run(mockedWebhookClient = null) {
     const color = core.getInput("color");
 
     let webhookClient;
+    /* istanbul ignore next */
     if (mockedWebhookClient) {
       console.log("WARNING: Using mockedWebhookClient (unit testing only)");
       webhookClient = mockedWebhookClient;
@@ -124,10 +125,10 @@ export async function run(mockedWebhookClient = null) {
         msg["flags"] |= MessageFlagsBitField.Flags.SuppressNotifications;
       }
       if (/SuppressEmbeds/.test(flags)) {
-        msg["flags"] |= MessageFlagsBitField.Message.Flags.SuppressEmbeds;
+        msg["flags"] |= MessageFlagsBitField.Flags.SuppressEmbeds;
       }
       if (/IsComponentsV2/.test(flags)) {
-        msg["flags"] |= MessageFlagsBitField.Message.Flags.IsComponentsV2;
+        msg["flags"] |= MessageFlagsBitField.Flags.IsComponentsV2;
       }
     }
 

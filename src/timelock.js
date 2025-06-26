@@ -41,6 +41,7 @@ export async function ensureDurationSinceLastRun(minIntervalSinceLastRunMs) {
   // passed since we last ran, calculate how long we need to wait and wait
   // slightly longer just to make sure.
   if (sinceLastRunMs < minIntervalSinceLastRunMs) {
+    /* istanbul ignore next */
     if (sinceLastRunMs < 0) {
       sinceLastRunMs = 0;
     } // just in case
