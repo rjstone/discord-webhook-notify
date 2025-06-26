@@ -73,6 +73,8 @@ export async function run(mockedWebhookClient = null) {
     const details = core.getInput("details") || "";
     const footer = core.getInput("footer") || "";
     const color = core.getInput("color");
+    const thumbnailUrl = core.getInput("thumbnailUrl");
+    const imageUrl = core.getInput("imageUrl");
 
     let webhookClient;
     /* istanbul ignore next */
@@ -110,6 +112,12 @@ export async function run(mockedWebhookClient = null) {
             "Severity: " + defaults.longSeverity[severity]
         })
         .setTimestamp();
+      if (thumbnailUrl) {
+        embed.setThumbnail(thumbnailUrl);
+      }
+      if (imageUrl) {
+        embed.setImage(imageUrl);
+      }
       msg = {
         username: username,
         avatarURL: avatarUrl,
