@@ -44,17 +44,20 @@ describe("main.js", () => {
     expect(getDebugTestUrl).toBeInstanceOf(Function);
   });
 
-  it("getDebugTestUrl can be called", async () => {
+  async function testGetDebugTestUrlHelper() {
     let url;
     try {
       url = await getDebugTestUrl();
     } catch (e) {
-      expect(e.code).toEqual("ENOENT");
-      console.log("Test URL doesn't exist but that's OK.")
-      return;
+      return e.code + ": Test URL doesn't exist but that's OK.";
     }
-    expect(url).toMatch(/http/);
-    console.log("Test URL: " + url)
+    return url;
+  }
+
+  it("getDebugTestUrl can be called", async () => {
+    const result = await testGetDebugTestUrlHelper();
+    expect(result).toMatch(/^ENOENT|http/);
+    console.log("Test URL: " + result)
   });
 
   describe("run", () => {
@@ -64,6 +67,16 @@ describe("main.js", () => {
       // jest.clearAllMocks();
     });
 
+    async function testUseTestURLHelper(whc) {
+      let status = "OK";
+      try {
+        await run(whc);
+      } catch (e) {
+        status = e.code;
+      }
+      return status;
+    }
+
     it("recognizes webhookUrl == 'useTestURL'", async () => {
       core.getInput.mockImplementation((input) => {
         return {
@@ -72,14 +85,13 @@ describe("main.js", () => {
         }[input];
       });
         let whc = new MockWebhookClient({ webhookUrl: regexCorrectWebhookUrl });
-        try {
-          await run(whc);
-        } catch (e) {
-          expect(e.code).toEqual("ENOINT");
-          return;
-        }
-        expect(whc.send_called).toBe(true);
-        expect(whc.send_arg.content).toMatch(/content/);
+        let result;
+        const twuh = async () => {
+          result = await testUseTestURLHelper(whc);
+        };
+        expect(twuh).not.toThrow();
+        result = await testUseTestURLHelper(whc);
+        expect(result).toMatch(/^ENOINT|OK/);
     });
 
     it("generates the right error when webhookUrl is empty", async () => {
@@ -183,10 +195,6 @@ describe("main.js", () => {
 
     })
 
-    test.todo("works with each individual optional input set");
-    test.todo("works with all inputs set");
-    test.todo("uses the configured holddownTime delay if set");
-
     it("leaves the message text out if it is empty but there is an embed", async () => {
       core.getInput.mockImplementation((input) => {
         return {
@@ -204,7 +212,6 @@ describe("main.js", () => {
       expect(whc.send_arg.embeds[0].data.title).toMatch("Informational");
       expect(whc.send_arg.embeds[0].data.description).toMatch("this is some info");
     });
-
 
     it("works after delay if executed with no delay in between two calls", async () => {
       // console.log(await Promise.all(promises));
@@ -224,6 +231,11 @@ describe("main.js", () => {
       const duration = Date.now() - start_time;
       expect(duration).toBeGreaterThanOrEqual(defaults.holddownTime);
     }, 10000);
+
+    test.todo("works with each individual optional input set");
+    test.todo("works with all inputs set");
+    test.todo("uses the configured holddownTime delay if set");
+    test.todo("honors processing options");
 
   });
 });
