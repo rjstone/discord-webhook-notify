@@ -16,7 +16,7 @@ jobs:
     name: Windows Test Job
     steps:
     - name: checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v6
       with:
         sparse-checkout: |
           dist
@@ -44,7 +44,7 @@ jobs:
     name: Linux Test Job
     steps:
     - name: checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v6
       with:
         sparse-checkout: |
           dist
@@ -64,7 +64,7 @@ jobs:
     name: MacOS Test Job
     steps:
     - name: checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v6
       with:
         sparse-checkout: |
           dist
@@ -86,7 +86,7 @@ jobs:
     name: YAML Embeds
     steps:
     - name: checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v6
       with:
         sparse-checkout: |
           dist
