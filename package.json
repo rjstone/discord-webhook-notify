@@ -34,7 +34,7 @@
   },
   "license": "MIT",
   "dependencies": {
-    "@actions/core": "^1.2.6",
+    "@actions/core": "^2.0.1",
     "@actions/github": "^6.0.1",
     "discord.js": "^14.19.3",
     "multibyte": "^1.0.4"
