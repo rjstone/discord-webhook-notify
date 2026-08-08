@@ -11,7 +11,8 @@ inputs:
     required: true
   flags:
     description: >
-      A whitespace-separated list of MessageFlags. The only one supported currently is SuppressNotifications.
+      A whitespace-separated list of MessageFlags. Supported values:
+      SuppressNotifications, SuppressEmbeds, IsComponentsV2.
     required: false
     default: ""
   username:
@@ -50,6 +51,9 @@ inputs:
     required: false
   thumbnailUrl:
     description: A URL to a thumbnail for the embed. Default is no image.
+    required: false
+  imageUrl:
+    description: A URL to a large image for the embed. Default is no image.
     required: false
   description:
     description: Embed notification message. Default provides some minimal github.context workflow info.

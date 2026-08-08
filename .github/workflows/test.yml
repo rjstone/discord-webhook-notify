@@ -91,7 +91,7 @@ jobs:
       with:
         sparse-checkout: |
           dist
-          action.yaml
+          action.yml
     - name: YAML Embeds
       uses: ./
       with:
@@ -108,3 +108,28 @@ jobs:
               icon_url: https://github.com/rjstone/discord-webhook-notify/raw/refs/heads/feat-embeds-comps/img/parrot-128px.webp
           - title: Embed2
             description: Description 2
+
+  raw_components_test:
+    runs-on: ubuntu-latest
+    name: YAML Components
+    steps:
+    - name: checkout
+      uses: actions/checkout@v4
+      with:
+        sparse-checkout: |
+          dist
+          action.yml
+    - name: YAML Components
+      uses: ./
+      with:
+        webhookUrl: ${{ secrets.DISCORD_WEBHOOK }}
+        username: YAML Components
+        content: Components passthrough test (link button)
+        flags: SuppressNotifications
+        components: |
+          - type: 1
+            components:
+              - type: 2
+                style: 5
+                label: Repo
+                url: https://github.com/rjstone/discord-webhook-notify

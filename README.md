@@ -89,18 +89,26 @@ this is strongly suggested. See the Discord documentation for image sizes and
 restrictions. If Discord doesn't like the image file or the URL for some reason
 then this will be silently ignored.
 
-### `text`
+### `content` / `text`
 
 String to display as normal chat text after the username and above everything
 else. This may contain Discord style markdown and is otherwise the equivalent
 of whatever a user types as a normal chat message. There is a 2000 "character"
 (which might actually mean bytes, it isn't clear) limit.
 
+`content` is the Discord API name for this field. `text` is a legacy alias kept
+for backward compatibility. If both are set, **`content` wins** and `text` is
+ignored (a warning is logged).
+
 ### `flags`
 
-A whitespace-separated list of MessageFlags. The only one supported currently
-is `SuppressNotifications` which will prevent the message from triggering a
-"bleep" or other attention-grabbing attenpt when received by the client.
+A whitespace-separated list of MessageFlags. Supported values:
+
+- `SuppressNotifications` — prevent the message from triggering a "bleep" or
+  other attention-grabbing attempt when received by the client
+- `SuppressEmbeds` — suppress automatic embeds (e.g. link previews)
+- `IsComponentsV2` — opt into Discord Components V2 layout (only needed if you
+  are using the newer component system via the raw `components` input)
 
 ### Embed
 
@@ -128,6 +136,15 @@ Color of the gutter bar on the left side of the "embed" section, in the form
 
 Title for the embed. Defaults to severity long terminology.
 
+### `thumbnailUrl`
+
+URL of a small thumbnail image shown on the right side of the severity/easy
+embed. Default is no thumbnail.
+
+### `imageUrl`
+
+URL of a large image attached to the severity/easy embed. Default is no image.
+
 ### `description`
 
 The first half of the text body of the embed. This defaults to showing only a
@@ -149,6 +166,57 @@ markdown.
 
 String to display in the "footer" section of the embed. This defaults to
 showing the severity level.
+
+### `embeds` (experimental)
+
+A **string** containing a YAML or JSON **array** of raw Discord embed objects.
+Because GitHub Actions inputs are strings, pass YAML with `|` or minified JSON.
+JSON is tried first, then YAML. Up to 10 embeds are sent (Discord's limit);
+extra entries are truncated with a warning.
+
+If `severity` is not `none`, the generated "easy" embed is **prepended** to this
+list. See the [Discord embed object docs](https://discord.com/developers/docs/resources/message#embed-object).
+
+Example (YAML):
+
+```yaml
+  - name: Multi-embed notify
+    uses: rjstone/discord-webhook-notify@v2
+    with:
+      webhookUrl: ${{ secrets.DISCORD_WEBHOOK }}
+      embeds: |
+        - title: First embed
+          description: Hello
+          color: 5814783
+        - title: Second embed
+          description: World
+```
+
+### `components` (experimental)
+
+A **string** containing a YAML or JSON **array** of raw Discord message
+components, passed through to the API with no validation. Not all component
+types work on webhooks (there is no bot/app to handle interactions). Link
+buttons in action rows are the usual safe choice. Use `|` for multi-line YAML.
+
+See [Discord message components](https://discord.com/developers/docs/components/using-message-components).
+
+Example (link button):
+
+```yaml
+  - name: Notify with link button
+    uses: rjstone/discord-webhook-notify@v2
+    with:
+      webhookUrl: ${{ secrets.DISCORD_WEBHOOK }}
+      content: Build finished — open the run:
+      components: |
+        - type: 1
+          components:
+            - type: 2
+              style: 5
+              label: View run
+              url: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+```
 
 ## "Advanced" Settings
 

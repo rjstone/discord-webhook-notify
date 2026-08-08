@@ -23,7 +23,7 @@ import * as defaults from "../src/defaults.js";
 
 // The module being tested should be imported last, dynamically.
 // This ensures that the modules mocks are used in place their imports.
-const { run, getDebugTestUrl } = await import("../src/main.js");
+const { run, getDebugTestUrl, parseJsonOrYaml } = await import("../src/main.js");
 
 const regexCorrectWebhookUrl =
   "https://discord.com/api/webhooks/999999999999999999" +
@@ -251,10 +251,226 @@ describe("main.js", () => {
       expect(whc.send_arg.embeds[0].data.image.url).toMatch(/image/);
     });
 
+    it("prefers content over text when both are set", async () => {
+      core.getInput.mockImplementation((input) => {
+        return {
+          webhookUrl: regexCorrectWebhookUrl,
+          content: "from content",
+          text: "from text"
+        }[input];
+      });
+      let whc = new MockWebhookClient({ webhookUrl: regexCorrectWebhookUrl });
+      await run(whc);
+      expect(whc.send_called).toBe(true);
+      expect(whc.send_arg.content).toBe("from content");
+      expect(core.warning).toHaveBeenCalled();
+      expect(core.warning.mock.lastCall[0]).toMatch(/both 'content' and 'text'/);
+    });
+
+    it("parses embeds from JSON and attaches them", async () => {
+      const embedsJson = JSON.stringify([
+        { title: "JSON Embed", description: "from json" }
+      ]);
+      core.getInput.mockImplementation((input) => {
+        return {
+          webhookUrl: regexCorrectWebhookUrl,
+          embeds: embedsJson
+        }[input];
+      });
+      let whc = new MockWebhookClient({ webhookUrl: regexCorrectWebhookUrl });
+      await run(whc);
+      expect(whc.send_called).toBe(true);
+      expect(whc.send_arg.embeds).toHaveLength(1);
+      expect(whc.send_arg.embeds[0].title).toBe("JSON Embed");
+    });
+
+    it("parses embeds from YAML and attaches them", async () => {
+      const embedsYaml = `
+- title: YAML Embed
+  description: from yaml
+`;
+      core.getInput.mockImplementation((input) => {
+        return {
+          webhookUrl: regexCorrectWebhookUrl,
+          embeds: embedsYaml
+        }[input];
+      });
+      let whc = new MockWebhookClient({ webhookUrl: regexCorrectWebhookUrl });
+      await run(whc);
+      expect(whc.send_called).toBe(true);
+      expect(whc.send_arg.embeds).toHaveLength(1);
+      expect(whc.send_arg.embeds[0].title).toBe("YAML Embed");
+    });
+
+    it("prepends the severity embed before raw embeds", async () => {
+      const embedsJson = JSON.stringify([{ title: "Raw" }]);
+      core.getInput.mockImplementation((input) => {
+        return {
+          webhookUrl: regexCorrectWebhookUrl,
+          severity: "warn",
+          description: "easy embed",
+          embeds: embedsJson
+        }[input];
+      });
+      let whc = new MockWebhookClient({ webhookUrl: regexCorrectWebhookUrl });
+      await run(whc);
+      expect(whc.send_arg.embeds).toHaveLength(2);
+      expect(whc.send_arg.embeds[0].data.title).toMatch(/Warning|warn/i);
+      expect(whc.send_arg.embeds[1].title).toBe("Raw");
+    });
+
+    it("truncates embeds longer than 10", async () => {
+      const many = Array.from({ length: 12 }, (_, i) => ({ title: `E${i}` }));
+      core.getInput.mockImplementation((input) => {
+        return {
+          webhookUrl: regexCorrectWebhookUrl,
+          embeds: JSON.stringify(many)
+        }[input];
+      });
+      let whc = new MockWebhookClient({ webhookUrl: regexCorrectWebhookUrl });
+      await run(whc);
+      expect(whc.send_arg.embeds).toHaveLength(10);
+      expect(core.warning).toHaveBeenCalled();
+      expect(core.warning.mock.lastCall[0]).toMatch(/limit 10/);
+    });
+
+    it("parses components from JSON and attaches them", async () => {
+      // Link button in an Action Row — valid for webhooks (no bot interaction needed).
+      const componentsJson = JSON.stringify([
+        {
+          type: 1,
+          components: [
+            {
+              type: 2,
+              style: 5,
+              label: "Open",
+              url: "https://example.com"
+            }
+          ]
+        }
+      ]);
+      core.getInput.mockImplementation((input) => {
+        return {
+          webhookUrl: regexCorrectWebhookUrl,
+          content: "with components",
+          components: componentsJson
+        }[input];
+      });
+      let whc = new MockWebhookClient({ webhookUrl: regexCorrectWebhookUrl });
+      await run(whc);
+      expect(whc.send_called).toBe(true);
+      expect(whc.send_arg.components).toHaveLength(1);
+      expect(whc.send_arg.components[0].type).toBe(1);
+      expect(whc.send_arg.components[0].components[0].label).toBe("Open");
+    });
+
+    it("parses components from YAML and attaches them", async () => {
+      const componentsYaml = `
+- type: 1
+  components:
+    - type: 2
+      style: 5
+      label: Docs
+      url: https://example.com/docs
+`;
+      core.getInput.mockImplementation((input) => {
+        return {
+          webhookUrl: regexCorrectWebhookUrl,
+          components: componentsYaml
+        }[input];
+      });
+      let whc = new MockWebhookClient({ webhookUrl: regexCorrectWebhookUrl });
+      await run(whc);
+      expect(whc.send_arg.components).toHaveLength(1);
+      expect(whc.send_arg.components[0].components[0].label).toBe("Docs");
+    });
+
+    it("warns and ignores unparseable embeds", async () => {
+      core.getInput.mockImplementation((input) => {
+        return {
+          webhookUrl: regexCorrectWebhookUrl,
+          content: "hi",
+          embeds: "this is not { valid json or: [ yaml"
+        }[input];
+      });
+      let whc = new MockWebhookClient({ webhookUrl: regexCorrectWebhookUrl });
+      await run(whc);
+      expect(whc.send_called).toBe(true);
+      expect(whc.send_arg.embeds).not.toBeDefined();
+      expect(core.warning).toHaveBeenCalled();
+      expect(core.warning.mock.lastCall[0]).toMatch(/embeds.*JSON or YAML/);
+    });
+
+    it("warns and ignores unparseable components", async () => {
+      // Anchors/aliases that YAML cannot resolve fail both parsers.
+      core.getInput.mockImplementation((input) => {
+        return {
+          webhookUrl: regexCorrectWebhookUrl,
+          content: "hi",
+          components: "*no_such_anchor"
+        }[input];
+      });
+      let whc = new MockWebhookClient({ webhookUrl: regexCorrectWebhookUrl });
+      await run(whc);
+      expect(whc.send_called).toBe(true);
+      expect(whc.send_arg.components).not.toBeDefined();
+      expect(core.warning).toHaveBeenCalled();
+      expect(core.warning.mock.lastCall[0]).toMatch(/components.*JSON or YAML/);
+    });
+
+    it("warns and ignores embeds that are not an array", async () => {
+      core.getInput.mockImplementation((input) => {
+        return {
+          webhookUrl: regexCorrectWebhookUrl,
+          content: "hi",
+          embeds: '{"title":"not an array"}'
+        }[input];
+      });
+      let whc = new MockWebhookClient({ webhookUrl: regexCorrectWebhookUrl });
+      await run(whc);
+      expect(whc.send_called).toBe(true);
+      expect(whc.send_arg.embeds).not.toBeDefined();
+      expect(core.warning).toHaveBeenCalled();
+      expect(core.warning.mock.lastCall[0]).toMatch(/embeds must be a JSON\/YAML array/);
+    });
+
+    it("warns and ignores components that are not an array", async () => {
+      core.getInput.mockImplementation((input) => {
+        return {
+          webhookUrl: regexCorrectWebhookUrl,
+          content: "hi",
+          components: '{"type":1}'
+        }[input];
+      });
+      let whc = new MockWebhookClient({ webhookUrl: regexCorrectWebhookUrl });
+      await run(whc);
+      expect(whc.send_called).toBe(true);
+      expect(whc.send_arg.components).not.toBeDefined();
+      expect(core.warning).toHaveBeenCalled();
+      expect(core.warning.mock.lastCall[0]).toMatch(
+        /components must be a JSON\/YAML array/
+      );
+    });
+
     test.todo("works with each individual optional input set");
     test.todo("works with all inputs set");
     test.todo("uses the configured holddownTime delay if set");
     test.todo("honors processing options");
 
+  });
+
+  describe("parseJsonOrYaml", () => {
+    it("returns empty array for empty input", () => {
+      expect(parseJsonOrYaml("", "x")).toEqual([]);
+      expect(parseJsonOrYaml(undefined, "x")).toEqual([]);
+    });
+
+    it("parses JSON", () => {
+      expect(parseJsonOrYaml('[{"a":1}]', "x")).toEqual([{ a: 1 }]);
+    });
+
+    it("parses YAML when JSON fails", () => {
+      expect(parseJsonOrYaml("- a: 1\n", "x")).toEqual([{ a: 1 }]);
+    });
   });
 });

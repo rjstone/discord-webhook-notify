@@ -136978,6 +136978,33 @@ async function getDebugTestUrl() {
 }
 
 /**
+ * Parse a string that is expected to be JSON or YAML (JSON tried first).
+ * Used for raw embeds / components passthrough inputs.
+ *
+ * @param { string } raw input string from the action
+ * @param { string } label name used in warning messages
+ * @returns { any } parsed value, or empty array if empty/unparseable
+ */
+function parseJsonOrYaml(raw, label) {
+  if (!raw) {
+    return [];
+  }
+  try {
+    return JSON.parse(raw);
+  } catch {
+    // not JSON; try YAML next
+  }
+  try {
+    return YAML.parse(raw);
+  } catch {
+    coreExports.warning(
+      `${label} is non-empty but couldn't be parsed as JSON or YAML`
+    );
+    return [];
+  }
+}
+
+/**
  * This is the main code for the GitHub Action
  *
  * @returns { undefined }
@@ -137024,28 +137051,18 @@ async function run(mockedWebhookClient = null) {
     const thumbnailUrl = coreExports.getInput("thumbnailUrl");
     const imageUrl = coreExports.getInput("imageUrl");
 
-    // full pass-through for JSON/YAML embeds.
-    // The input should be a string containing a JSON or YAML array.
-    let embedsMaybeJSONYAML = coreExports.getInput("embeds");
-    let embeds = [];
-    if (embedsMaybeJSONYAML) {
-      let failed = false;
-      try {
-        embeds = JSON.parse(embedsMaybeJSONYAML);
-      } catch {
-        failed = true;
-      }
-      if (failed) {
-        failed = false;
-        try {
-          embeds = YAML.parse(embedsMaybeJSONYAML);
-        } catch {
-          failed = true;
-        }
-      }
-      if (failed) {
-        coreExports.warning("embeds is non-empty but couldn't be parsed as JSON or YAML");
-      }
+    // full pass-through for JSON/YAML embeds and components.
+    // Each input should be a string containing a JSON or YAML array.
+    let embeds = parseJsonOrYaml(coreExports.getInput("embeds"), "embeds");
+    if (!Array.isArray(embeds)) {
+      coreExports.warning("embeds must be a JSON/YAML array; ignoring");
+      embeds = [];
+    }
+
+    let components = parseJsonOrYaml(coreExports.getInput("components"), "components");
+    if (!Array.isArray(components)) {
+      coreExports.warning("components must be a JSON/YAML array; ignoring");
+      components = [];
     }
 
     /**
@@ -137079,22 +137096,24 @@ async function run(mockedWebhookClient = null) {
         embed.setImage(imageUrl);
       }
       // the "easy embed" will get prepended to the list if it exists.
-      embeds = [ embed ].concat(embeds);
+      embeds = [embed].concat(embeds);
     }
 
     if (embeds.length > 10) {
-      coreExports.warning("embeds array is longer than allowed limit 10. Truncating to 10.");
-      embeds = embeds.slice(0,10);
+      coreExports.warning(
+        "embeds array is longer than allowed limit 10. Truncating to 10."
+      );
+      embeds = embeds.slice(0, 10);
     }
 
     /**
      * Compose Message
      */
     const msg = {
-        username: username$1,
-        avatarURL: avatarUrl$1
-      };
-    if (content) msg['content'] = content;
+      username: username$1,
+      avatarURL: avatarUrl$1
+    };
+    if (content) msg["content"] = content;
     if (flags !== "") {
       msg["flags"] = 0;
       if (/SuppressNotifications/.test(flags)) {
@@ -137107,9 +137126,12 @@ async function run(mockedWebhookClient = null) {
         msg["flags"] |= srcExports.MessageFlagsBitField.Flags.IsComponentsV2;
       }
     }
-    // Add embeds if there are any.
-    if (embeds) {
-      msg['embeds'] = embeds;
+    // Add embeds / components when present (raw passthrough + optional easy embed).
+    if (embeds.length) {
+      msg["embeds"] = embeds;
+    }
+    if (components.length) {
+      msg["components"] = components;
     }
 
     let webhookClient;
@@ -137127,7 +137149,6 @@ async function run(mockedWebhookClient = null) {
 
     await ensureDurationSinceLastRun(holddownTime$1);
     await webhookClient.send(msg);
-
   } catch (error) {
     // not so sure the workflow should show an error just because the notification failed
     coreExports.notice(error.message);
