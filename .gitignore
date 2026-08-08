@@ -107,3 +107,21 @@ __tests__/runner/*
 # repl file
 SCRATCH*.js
 .vscode/settings.json
+
+# AI / agent tooling (local only — do not commit)
+.claude/
+.grok/
+.cursor/
+.codex/
+.agent/
+.agents/
+.aider*
+.continue/
+.windsurf/
+.gemini/
+.github/copilot*
+AGENTS.md
+CLAUDE.md
+.clinerules
+.cursorrules
+.cursorignore
