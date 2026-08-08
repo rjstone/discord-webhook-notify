@@ -21,7 +21,7 @@ jobs:
       with:
         sparse-checkout: |
           dist
-          action.yaml
+          action.yml
 
     - name: Windows Test No Embed
       uses: ./
@@ -49,7 +49,7 @@ jobs:
       with:
         sparse-checkout: |
           dist
-          action.yaml
+          action.yml
     - name: Linux Test Custom
       uses: ./
       with:
@@ -69,7 +69,7 @@ jobs:
       with:
         sparse-checkout: |
           dist
-          action.yaml
+          action.yml
     - name: MacOS Test Custom
       uses: ./
       with:
@@ -114,7 +114,7 @@ jobs:
     name: YAML Components
     steps:
     - name: checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v6
       with:
         sparse-checkout: |
           dist

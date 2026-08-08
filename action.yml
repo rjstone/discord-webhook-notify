@@ -32,7 +32,7 @@ inputs:
     required: false
   text:
     description: >
-      This is an alias for 'content' for backward compatability. The Discord API calls this 'content',
+      This is an alias for 'content' for backward compatibility. The Discord API calls this 'content',
       but for unknown reasons 'text' was used in the past. If both 'text' and 'content' are set then
       'content' will be used and 'text' will be ignored.
     required: false
