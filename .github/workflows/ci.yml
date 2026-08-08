@@ -45,14 +45,14 @@ jobs:
     steps:
       - name: Checkout
         id: checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - run: echo "build_status_message=FAIL" >> $GITHUB_ENV
       - run: echo "build_status_color=9e1010" >> $GITHUB_ENV
 
       - name: Setup Node.js
         id: setup-node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version-file: .node-version
           cache: npm
@@ -100,7 +100,7 @@ jobs:
     steps:
       - name: Checkout
         id: checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Test Action
         id: test-action
