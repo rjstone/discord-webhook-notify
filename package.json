@@ -1,7 +1,7 @@
 {
   "name": "discord-webhook-notify",
   "description": "GitHub Action to send notifications to Discord using a webhook.",
-  "version": "2.2.0",
+  "version": "2.3.0",
   "author": "rjstone@github",
   "type": "module",
   "private": false,

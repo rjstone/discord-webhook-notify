@@ -63,7 +63,7 @@ secrets are not passed to anything by default, only as parameters.
 - Because of this, consider forking this repo and referring to the action using your fork.
 - If you don't want to fork until necessary:
   - Use `rjstone/discord-webhook-notify@v2.x.x` (or another specific tag after the @) if you want to guarantee use of a specific revision.
-  - Use `rjstone/discord-webhook-notify@v2` if you want updates but nothing that should be backward-compatabiliy breaking. (If anything breaks compatability it will be in v3+.)
+  - Use `rjstone/discord-webhook-notify@v2` if you want updates but nothing that should be backward-compatibility breaking. (If anything breaks compatibility it will be in v3+.)
   - **Don't use any `v1.x.x` as these have been broken by various changes over time and will no longer work properly.**
 
 ## Inputs
