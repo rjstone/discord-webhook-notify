@@ -5,6 +5,7 @@ on:
     branches:
       - main
       - v2
+      - "feat-*"
     paths:
       - .github/workflows/test.yml
       - dist
@@ -15,8 +16,15 @@ jobs:
     runs-on: windows-latest
     name: Windows Test Job
     steps:
+    - name: checkout
+      uses: actions/checkout@v4
+      with:
+        sparse-checkout: |
+          dist
+          action.yaml
+
     - name: Windows Test No Embed
-      uses: rjstone/discord-webhook-notify@main
+      uses: ./
       with:
         webhookUrl: ${{ secrets.DISCORD_WEBHOOK }}
         username: Windows Bot
@@ -24,7 +32,7 @@ jobs:
         flags: SuppressNotifications
 
     - name: Windows Test Default Embed
-      uses: rjstone/discord-webhook-notify@main
+      uses: ./
       with:
         webhookUrl: ${{ secrets.DISCORD_WEBHOOK }}
         username: Windows Bot
@@ -36,8 +44,14 @@ jobs:
     runs-on: ubuntu-latest
     name: Linux Test Job
     steps:
+    - name: checkout
+      uses: actions/checkout@v4
+      with:
+        sparse-checkout: |
+          dist
+          action.yaml
     - name: Linux Test Custom
-      uses: rjstone/discord-webhook-notify@main
+      uses: ./
       with:
         webhookUrl: ${{ secrets.DISCORD_WEBHOOK }}
         username: Linux Bot
@@ -50,8 +64,14 @@ jobs:
     runs-on: macos-latest
     name: MacOS Test Job
     steps:
+    - name: checkout
+      uses: actions/checkout@v4
+      with:
+        sparse-checkout: |
+          dist
+          action.yaml
     - name: MacOS Test Custom
-      uses: rjstone/discord-webhook-notify@main
+      uses: ./
       with:
         webhookUrl: ${{ secrets.DISCORD_WEBHOOK }}
         username: MacOS X Bot
@@ -61,3 +81,55 @@ jobs:
         description: This is a custom description.
         footer: This is a footer.
         flags: SuppressNotifications
+
+  raw_yaml_test:
+    runs-on: ubuntu-latest
+    name: YAML Embeds
+    steps:
+    - name: checkout
+      uses: actions/checkout@v4
+      with:
+        sparse-checkout: |
+          dist
+          action.yml
+    - name: YAML Embeds
+      uses: ./
+      with:
+        webhookUrl: ${{ secrets.DISCORD_WEBHOOK }}
+        username: YAML Embeds
+        text: This is a test of YAML Embeds
+        details: 'These details should not appear.'
+        flags: SuppressNotifications
+        embeds: |
+          - title: Embed1
+            description: Description 1
+            author:
+              name: Bob
+              icon_url: https://github.com/rjstone/discord-webhook-notify/raw/refs/heads/feat-embeds-comps/img/parrot-128px.webp
+          - title: Embed2
+            description: Description 2
+
+  raw_components_test:
+    runs-on: ubuntu-latest
+    name: YAML Components
+    steps:
+    - name: checkout
+      uses: actions/checkout@v4
+      with:
+        sparse-checkout: |
+          dist
+          action.yml
+    - name: YAML Components
+      uses: ./
+      with:
+        webhookUrl: ${{ secrets.DISCORD_WEBHOOK }}
+        username: YAML Components
+        content: Components passthrough test (link button)
+        flags: SuppressNotifications
+        components: |
+          - type: 1
+            components:
+              - type: 2
+                style: 5
+                label: Repo
+                url: https://github.com/rjstone/discord-webhook-notify

@@ -9,9 +9,9 @@ import os from "node:os";
 import path from "node:path";
 
 import * as core from "@actions/core";
-// import * as github from "@actions/github";
 
 import { EmbedBuilder, WebhookClient, MessageFlagsBitField } from "discord.js";
+import YAML from 'yaml';
 
 import * as defaults from "./defaults";
 import { ensureDurationSinceLastRun, updateLockFileTime } from "./timelock";
@@ -33,6 +33,33 @@ export async function getDebugTestUrl() {
     path.join(os.homedir(), "github_webhookUrl.txt"),
     "utf8"
   );
+}
+
+/**
+ * Parse a string that is expected to be JSON or YAML (JSON tried first).
+ * Used for raw embeds / components passthrough inputs.
+ *
+ * @param { string } raw input string from the action
+ * @param { string } label name used in warning messages
+ * @returns { any } parsed value, or empty array if empty/unparseable
+ */
+export function parseJsonOrYaml(raw, label) {
+  if (!raw) {
+    return [];
+  }
+  try {
+    return JSON.parse(raw);
+  } catch {
+    // not JSON; try YAML next
+  }
+  try {
+    return YAML.parse(raw);
+  } catch {
+    core.warning(
+      `${label} is non-empty but couldn't be parsed as JSON or YAML`
+    );
+    return [];
+  }
 }
 
 /**
@@ -62,34 +89,44 @@ export async function run(mockedWebhookClient = null) {
     );
     const avatarUrl =
       truncateStringIfNeeded(core.getInput("avatarUrl")) || defaults.avatarUrl;
-    const text =
-      truncateStringIfNeeded(processIfNeeded(core.getInput("text") || "" )) ;
+    // I'm unsure why this wasn't always called content.
+    // API change? Bad naming in previous module?
+    if (core.getInput("content") && core.getInput("text")) {
+      core.warning("both 'content' and 'text' are set. 'text' will be ignored.");
+    }
+    const textOrContent = core.getInput("content") || core.getInput("text") || "";
+    const content = truncateStringIfNeeded(processIfNeeded(textOrContent));
+
     const flags = core.getInput("flags") || "";
 
-    // goes in embed in message
+    // The "easy" embed fields.
     const severity = core.getInput("severity") || "none";
     const title = core.getInput("title") || "";
     const description = core.getInput("description") || "";
     const details = core.getInput("details") || "";
     const footer = core.getInput("footer") || "";
     const color = core.getInput("color");
+    const thumbnailUrl = core.getInput("thumbnailUrl");
+    const imageUrl = core.getInput("imageUrl");
 
-    let webhookClient;
-    /* istanbul ignore next */
-    if (mockedWebhookClient) {
-      console.log("WARNING: Using mockedWebhookClient (unit testing only)");
-      webhookClient = mockedWebhookClient;
-    } else {
-      webhookClient = new WebhookClient({ url: webhookUrl });
+    // full pass-through for JSON/YAML embeds and components.
+    // Each input should be a string containing a JSON or YAML array.
+    let embeds = parseJsonOrYaml(core.getInput("embeds"), "embeds");
+    if (!Array.isArray(embeds)) {
+      core.warning("embeds must be a JSON/YAML array; ignoring");
+      embeds = [];
     }
 
-    let msg;
-    if (severity === "none") {
-      msg = {
-        username: username,
-        avatarURL: avatarUrl
-      };
-    } else {
+    let components = parseJsonOrYaml(core.getInput("components"), "components");
+    if (!Array.isArray(components)) {
+      core.warning("components must be a JSON/YAML array; ignoring");
+      components = [];
+    }
+
+    /**
+     * Build the "easy embed" if needed.
+     */
+    if (severity !== "none") {
       const embed = new EmbedBuilder()
         .setTitle(
           truncateStringIfNeeded(title) || defaults.longSeverity[severity]
@@ -110,15 +147,31 @@ export async function run(mockedWebhookClient = null) {
             "Severity: " + defaults.longSeverity[severity]
         })
         .setTimestamp();
-      msg = {
-        username: username,
-        avatarURL: avatarUrl,
-        embeds: [embed]
-      };
+      if (thumbnailUrl) {
+        embed.setThumbnail(thumbnailUrl);
+      }
+      if (imageUrl) {
+        embed.setImage(imageUrl);
+      }
+      // the "easy embed" will get prepended to the list if it exists.
+      embeds = [embed].concat(embeds);
     }
 
-    if (text) msg['content'] = text;
+    if (embeds.length > 10) {
+      core.warning(
+        "embeds array is longer than allowed limit 10. Truncating to 10."
+      );
+      embeds = embeds.slice(0, 10);
+    }
 
+    /**
+     * Compose Message
+     */
+    const msg = {
+      username: username,
+      avatarURL: avatarUrl
+    };
+    if (content) msg["content"] = content;
     if (flags !== "") {
       msg["flags"] = 0;
       if (/SuppressNotifications/.test(flags)) {
@@ -131,16 +184,29 @@ export async function run(mockedWebhookClient = null) {
         msg["flags"] |= MessageFlagsBitField.Flags.IsComponentsV2;
       }
     }
+    // Add embeds / components when present (raw passthrough + optional easy embed).
+    if (embeds.length) {
+      msg["embeds"] = embeds;
+    }
+    if (components.length) {
+      msg["components"] = components;
+    }
+
+    let webhookClient;
+    /* istanbul ignore next */
+    if (mockedWebhookClient) {
+      console.log("WARNING: Using mockedWebhookClient (unit testing only)");
+      webhookClient = mockedWebhookClient;
+    } else {
+      webhookClient = new WebhookClient({ url: webhookUrl });
+    }
 
     const holddownTime =
       Number.parseInt(core.getInput("holddownTime"), 10) ||
       defaults.holddownTime;
 
     await ensureDurationSinceLastRun(holddownTime);
-
-
     await webhookClient.send(msg);
-
   } catch (error) {
     // not so sure the workflow should show an error just because the notification failed
     core.notice(error.message);
