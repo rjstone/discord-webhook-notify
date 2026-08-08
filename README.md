@@ -269,7 +269,7 @@ Using lots of defaults (not recommended), but still adding a message in the embe
 
 ```
 
-Without any embed:
+Without any embed (`content` is preferred; `text` is still accepted as an alias):
 
 ```yaml
 
@@ -278,8 +278,8 @@ Without any embed:
     with:
       webhookUrl: ${{ secrets.DISCORD_WEBHOOK }}
       username: AwesomeSauce GitHub Repo Build Process
-      avatarUrl: https://<some awesome domain/<some awesome>.png
-      text: |
+      avatarUrl: https://<some awesome domain>/<some awesome>.png
+      content: |
           This is a text-only notification.
           * But it can contain (Discord) Markdown.
 
@@ -287,7 +287,8 @@ Without any embed:
 
 ### Minimal Full Custom Example
 
-Something more fully customized:
+Something more fully customized, including optional thumbnail/image on the
+severity embed:
 
 ```yaml
 
@@ -297,12 +298,71 @@ Something more fully customized:
       webhookUrl: ${{ secrets.DISCORD_WEBHOOK }}
       username: Custom Bot Username
       avatarUrl: https://domain/images/custom.png
-      text: Below this normal-looking message is an embed!
+      content: Below this normal-looking message is an embed!
       severity: info # only to make sure the embed is added
       color: '#ff00aa'
       title: My Fancy Embed Title
       description: "This is a ***SuPeR custom*** description. I hope it looks good."
       # details: not needed because we overrode default description.
       footer: This embed was brought to you by the letter R and the number 4.
+      thumbnailUrl: https://domain/images/thumb.png
+      imageUrl: https://domain/images/banner.png
+
+```
+
+### Raw embeds (experimental)
+
+Pass a YAML (or JSON) **array** as a string. If `severity` is also set, the
+generated easy embed is prepended.
+
+```yaml
+
+  - name: Multi-embed notify
+    uses: rjstone/discord-webhook-notify@v2
+    with:
+      webhookUrl: ${{ secrets.DISCORD_WEBHOOK }}
+      content: Build report
+      embeds: |
+        - title: Unit tests
+          description: All green
+          color: 5763719
+        - title: Deploy
+          description: Staging updated
+          color: 3447003
+
+```
+
+Same thing as minified JSON (handy when the value comes from another step):
+
+```yaml
+
+  - name: Multi-embed notify (JSON)
+    uses: rjstone/discord-webhook-notify@v2
+    with:
+      webhookUrl: ${{ secrets.DISCORD_WEBHOOK }}
+      embeds: '[{"title":"Unit tests","description":"All green","color":5763719}]'
+
+```
+
+### Link button via components (experimental)
+
+Webhook-safe pattern: an action row with a **link** button (style `5`). Other
+component types often need a bot and will not work on plain webhooks.
+
+```yaml
+
+  - name: Notify with link button
+    uses: rjstone/discord-webhook-notify@v2
+    with:
+      webhookUrl: ${{ secrets.DISCORD_WEBHOOK }}
+      content: Build finished — open the run:
+      flags: SuppressNotifications
+      components: |
+        - type: 1
+          components:
+            - type: 2
+              style: 5
+              label: View run
+              url: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
 
 ```
