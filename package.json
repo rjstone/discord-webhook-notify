@@ -58,7 +58,7 @@
     "make-coverage-badge": "^1.2.0",
     "npm": "^12.0.2",
     "prettier": "^3.9.6",
-    "prettier-eslint": "^17.1.1",
-    "rollup": "^4.62.4"
+    "prettier-eslint": "^17.1.2",
+    "rollup": "^4.62.5"
   }
 }
