@@ -86,7 +86,7 @@ jobs:
         run: npx badge 'CI Status (${{ env.BRANCH_NAME }})' '${{ env.build_status_message }}' '#${{ env.build_status_color }}' grey @plastic > badges/status_${{ env.BRANCH_NAME }}.svg
 
       - name: Github Pages Deploy
-        uses: peaceiris/actions-gh-pages@v4.0.0
+        uses: peaceiris/actions-gh-pages@v4.1.0
         if: always()
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
