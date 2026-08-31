@@ -43,22 +43,22 @@
   "devDependencies": {
     "@eslint/compat": "^2.1.0",
     "@github/local-action": "^7.0.1",
-    "@jest/globals": "^30.4.1",
+    "@jest/globals": "^30.5.0",
     "@rollup/plugin-commonjs": "^29.0.3",
     "@rollup/plugin-json": "^6.1.0",
     "@rollup/plugin-node-resolve": "^16.0.3",
     "badge-maker": "^6.0.0",
     "cross-env": "^10.1.0",
-    "eslint": "^10.8.1",
+    "eslint": "^10.9.1",
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-import": "^2.32.0",
-    "eslint-plugin-jest": "^29.16.1",
+    "eslint-plugin-jest": "^29.16.5",
     "eslint-plugin-prettier": "^5.5.6",
-    "jest": "^30.4.2",
+    "jest": "^30.5.0",
     "make-coverage-badge": "^1.2.0",
     "npm": "^12.0.2",
     "prettier": "^3.9.6",
     "prettier-eslint": "^17.1.2",
-    "rollup": "^4.62.5"
+    "rollup": "^4.63.1"
   }
 }
