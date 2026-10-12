@@ -9521,7 +9521,7 @@ function requireClientH1 () {
 
 	function clearIdleSocketValidation (socket) {
 	  if (socket[kIdleSocketValidationTimeout]) {
-	    clearTimeout(socket[kIdleSocketValidationTimeout]);
+	    clearImmediate(socket[kIdleSocketValidationTimeout]);
 	    socket[kIdleSocketValidationTimeout] = null;
 	  }
 
@@ -9530,15 +9530,23 @@ function requireClientH1 () {
 
 	function scheduleIdleSocketValidation (client, socket) {
 	  socket[kIdleSocketValidation] = 1;
-	  socket[kIdleSocketValidationTimeout] = setTimeout(() => {
+	  // Yield to the check phase (after poll) so unsolicited bytes / FIN / RST
+	  // already pending on this idle keep-alive socket are processed before the
+	  // next request is written (GHSA-35p6-xmwp-9g52).
+	  //
+	  // setTimeout(0) pays Node's ~1ms timer floor on every sequential reuse
+	  // (#5493). setImmediate avoids that, but an *unref'd* Immediate lets poll
+	  // block for ~500ms when the event loop is otherwise idle (#5600 / #5606).
+	  // A ref'd Immediate both keeps the pending request alive and makes poll
+	  // return immediately — the hybrid those issues asked for.
+	  socket[kIdleSocketValidationTimeout] = setImmediate(() => {
 	    socket[kIdleSocketValidationTimeout] = null;
 	    socket[kIdleSocketValidation] = 2;
 
 	    if (client[kSocket] === socket && !socket.destroyed) {
 	      client[kResume]();
 	    }
-	  }, 0);
-	  socket[kIdleSocketValidationTimeout].unref?.();
+	  });
 	}
 
 	/**
@@ -13158,6 +13166,7 @@ function requireRetryHandler () {
 	    this.end = null;
 	    this.etag = null;
 	    this.resume = null;
+	    this.headersSent = false;
 
 	    // Handle possible onConnect duplication
 	    this.handler.onConnect(reason => {
@@ -13168,6 +13177,20 @@ function requireRetryHandler () {
 	        this.reason = reason;
 	      }
 	    });
+	  }
+
+	  checkpointResponseEnd (headers, resume) {
+	    if (this.end == null && this.opts.method !== 'HEAD') {
+	      const contentLength = headers['content-length'];
+	      this.end = contentLength != null ? Number(contentLength) - 1 : null;
+
+	      assert(
+	        this.end == null || Number.isFinite(this.end),
+	        'invalid content-length'
+	      );
+	    }
+
+	    this.resume = this.end != null ? resume : null;
 	  }
 
 	  onRequestSent () {
@@ -13259,6 +13282,8 @@ function requireRetryHandler () {
 
 	    if (statusCode >= 300) {
 	      if (this.retryOpts.statusCodes.includes(statusCode) === false) {
+	        this.headersSent = true;
+	        this.checkpointResponseEnd(headers, resume);
 	        return this.handler.onHeaders(
 	          statusCode,
 	          rawHeaders,
@@ -13327,8 +13352,15 @@ function requireRetryHandler () {
 
 	      const { start, size, end = size - 1 } = contentRange;
 
-	      assert(this.start === start, 'content-range mismatch');
-	      assert(this.end == null || this.end === end, 'content-range mismatch');
+	      if (this.start !== start || (this.end != null && this.end !== end)) {
+	        this.abort(
+	          new RequestRetryError('Content-Range mismatch', statusCode, {
+	            headers,
+	            data: { count: this.retryCount }
+	          })
+	        );
+	        return false
+	      }
 
 	      this.resume = resume;
 	      return true
@@ -13340,6 +13372,7 @@ function requireRetryHandler () {
 	        const range = parseRangeHeader(headers['content-range']);
 
 	        if (range == null) {
+	          this.headersSent = true;
 	          return this.handler.onHeaders(
 	            statusCode,
 	            rawHeaders,
@@ -13378,6 +13411,7 @@ function requireRetryHandler () {
 	      );
 
 	      this.resume = resume;
+	      this.headersSent = true;
 	      this.etag = headers.etag != null ? headers.etag : null;
 
 	      // Weak etags are not useful for comparison nor cache
@@ -13417,7 +13451,7 @@ function requireRetryHandler () {
 	  }
 
 	  onError (err) {
-	    if (this.aborted || isDisturbed(this.opts.body)) {
+	    if (this.aborted || isDisturbed(this.opts.body) || (this.headersSent && this.resume == null)) {
 	      return this.handler.onError(err)
 	    }
 
@@ -23990,11 +24024,11 @@ function requireUtil$3 () {
 	return util$2;
 }
 
-var parse$2;
+var parse$3;
 var hasRequiredParse;
 
 function requireParse () {
-	if (hasRequiredParse) return parse$2;
+	if (hasRequiredParse) return parse$3;
 	hasRequiredParse = 1;
 
 	const { maxNameValuePairSize, maxAttributeValueSize } = requireConstants$3();
@@ -24301,11 +24335,11 @@ function requireParse () {
 	  return parseUnparsedAttributes(unparsedAttributes, cookieAttributeList)
 	}
 
-	parse$2 = {
+	parse$3 = {
 	  parseSetCookie,
 	  parseUnparsedAttributes
 	};
-	return parse$2;
+	return parse$3;
 }
 
 var cookies;
@@ -25564,7 +25598,7 @@ function requireConnection () {
 	        // is specified, the server needs to include the same field and one of
 	        // the selected subprotocol values in its response for the connection to
 	        // be established.
-	        if (!requestProtocols.includes(secProtocol)) {
+	        if (requestProtocols === null || !requestProtocols.includes(secProtocol)) {
 	          failWebsocketConnection(ws, 'Protocol was not set in the opening handshake.');
 	          return
 	        }
@@ -25811,7 +25845,12 @@ function requirePermessageDeflate$1 () {
 
 	        if (this.#maxPayloadSize > 0 && this.#inflate[kLength] > this.#maxPayloadSize) {
 	          callback(new MessageSizeExceededError());
+	          // The inflater may still hold buffered input that can emit a late
+	          // zlib error. Remove the data listener, then deterministically stop
+	          // the stream so a subsequent 'error' cannot fire without a listener
+	          // (which would terminate the process as an unhandled error event).
 	          this.#inflate.removeAllListeners();
+	          this.#inflate.destroy();
 	          this.#inflate = null;
 	          return
 	        }
@@ -27160,6 +27199,49 @@ function requireEventsourceStream () {
 	 */
 	const SPACE = 0x20;
 
+	const DATA = Buffer.from('data');
+	const EVENT = Buffer.from('event');
+	const ID = Buffer.from('id');
+	const RETRY = Buffer.from('retry');
+
+	function isASCIINumberBytes (buffer, start) {
+	  if (start >= buffer.length) {
+	    return false
+	  }
+
+	  for (let i = start; i < buffer.length; i++) {
+	    if (buffer[i] < 0x30 || buffer[i] > 0x39) {
+	      return false
+	    }
+	  }
+
+	  return true
+	}
+
+	function isValidLastEventIdBytes (buffer, start) {
+	  for (let i = start; i < buffer.length; i++) {
+	    if (buffer[i] === 0x00) {
+	      return false
+	    }
+	  }
+
+	  return true
+	}
+
+	function isFieldName (line, length, field) {
+	  if (length !== field.length) {
+	    return false
+	  }
+
+	  for (let i = 0; i < length; i++) {
+	    if (line[i] !== field[i]) {
+	      return false
+	    }
+	  }
+
+	  return true
+	}
+
 	/**
 	 * @typedef {object} EventSourceStreamEvent
 	 * @type {object}
@@ -27200,11 +27282,14 @@ function requireEventsourceStream () {
 	  eventEndCheck = false
 
 	  /**
-	   * @type {Buffer}
+	   * @type {Buffer[]}
 	   */
-	  buffer = null
+	  chunks = []
 
+	  chunkIndex = 0
 	  pos = 0
+	  lineChunkIndex = 0
+	  linePos = 0
 
 	  event = {
 	    data: undefined,
@@ -27243,92 +27328,20 @@ function requireEventsourceStream () {
 	      return
 	    }
 
-	    // Cache the chunk in the buffer, as the data might not be complete while
-	    // processing it
-	    // TODO: Investigate if there is a more performant way to handle
-	    // incoming chunks
-	    // see: https://github.com/nodejs/undici/issues/2630
-	    if (this.buffer) {
-	      this.buffer = Buffer.concat([this.buffer, chunk]);
-	    } else {
-	      this.buffer = chunk;
-	    }
+	    this.chunks.push(chunk);
 
 	    // Strip leading byte-order-mark if we opened the stream and started
 	    // the processing of the incoming data
 	    if (this.checkBOM) {
-	      switch (this.buffer.length) {
-	        case 1:
-	          // Check if the first byte is the same as the first byte of the BOM
-	          if (this.buffer[0] === BOM[0]) {
-	            // If it is, we need to wait for more data
-	            callback();
-	            return
-	          }
-	          // Set the checkBOM flag to false as we don't need to check for the
-	          // BOM anymore
-	          this.checkBOM = false;
-
-	          // The buffer only contains one byte so we need to wait for more data
-	          callback();
-	          return
-	        case 2:
-	          // Check if the first two bytes are the same as the first two bytes
-	          // of the BOM
-	          if (
-	            this.buffer[0] === BOM[0] &&
-	            this.buffer[1] === BOM[1]
-	          ) {
-	            // If it is, we need to wait for more data, because the third byte
-	            // is needed to determine if it is the BOM or not
-	            callback();
-	            return
-	          }
-
-	          // Set the checkBOM flag to false as we don't need to check for the
-	          // BOM anymore
-	          this.checkBOM = false;
-	          break
-	        case 3:
-	          // Check if the first three bytes are the same as the first three
-	          // bytes of the BOM
-	          if (
-	            this.buffer[0] === BOM[0] &&
-	            this.buffer[1] === BOM[1] &&
-	            this.buffer[2] === BOM[2]
-	          ) {
-	            // If it is, we can drop the buffered data, as it is only the BOM
-	            this.buffer = Buffer.alloc(0);
-	            // Set the checkBOM flag to false as we don't need to check for the
-	            // BOM anymore
-	            this.checkBOM = false;
-
-	            // Await more data
-	            callback();
-	            return
-	          }
-	          // If it is not the BOM, we can start processing the data
-	          this.checkBOM = false;
-	          break
-	        default:
-	          // The buffer is longer than 3 bytes, so we can drop the BOM if it is
-	          // present
-	          if (
-	            this.buffer[0] === BOM[0] &&
-	            this.buffer[1] === BOM[1] &&
-	            this.buffer[2] === BOM[2]
-	          ) {
-	            // Remove the BOM from the buffer
-	            this.buffer = this.buffer.subarray(3);
-	          }
-
-	          // Set the checkBOM flag to false as we don't need to check for the
-	          this.checkBOM = false;
-	          break
+	      if (this.handleBOM()) {
+	        callback();
+	        return
 	      }
 	    }
 
-	    while (this.pos < this.buffer.length) {
+	    while (this.hasCurrentByte()) {
+	      const byte = this.currentByte();
+
 	      // If the previous line ended with an end-of-line, we need to check
 	      // if the next character is also an end-of-line.
 	      if (this.eventEndCheck) {
@@ -27341,10 +27354,9 @@ function requireEventsourceStream () {
 	        if (this.crlfCheck) {
 	          // If the current character is a line feed, we can remove it
 	          // from the buffer and reset the crlfCheck flag
-	          if (this.buffer[this.pos] === LF) {
-	            this.buffer = this.buffer.subarray(this.pos + 1);
-	            this.pos = 0;
+	          if (byte === LF) {
 	            this.crlfCheck = false;
+	            this.consumeCurrentByte();
 
 	            // It is possible that the line feed is not the end of the
 	            // event. We need to check if the next character is an
@@ -27360,19 +27372,17 @@ function requireEventsourceStream () {
 	          this.crlfCheck = false;
 	        }
 
-	        if (this.buffer[this.pos] === LF || this.buffer[this.pos] === CR) {
+	        if (byte === LF || byte === CR) {
 	          // If the current character is a carriage return, we need to
 	          // set the crlfCheck flag to true, as we need to check if the
 	          // next character is a line feed so we can remove it from the
 	          // buffer
-	          if (this.buffer[this.pos] === CR) {
+	          if (byte === CR) {
 	            this.crlfCheck = true;
 	          }
 
-	          this.buffer = this.buffer.subarray(this.pos + 1);
-	          this.pos = 0;
-	          if (
-	            this.event.data !== undefined || this.event.event || this.event.id || this.event.retry) {
+	          this.consumeCurrentByte();
+	          if (this.hasPendingEvent()) {
 	            this.processEvent(this.event);
 	          }
 	          this.clearEvent();
@@ -27386,22 +27396,18 @@ function requireEventsourceStream () {
 
 	      // If the current character is an end-of-line, we can process the
 	      // line
-	      if (this.buffer[this.pos] === LF || this.buffer[this.pos] === CR) {
+	      if (byte === LF || byte === CR) {
 	        // If the current character is a carriage return, we need to
 	        // set the crlfCheck flag to true, as we need to check if the
 	        // next character is a line feed
-	        if (this.buffer[this.pos] === CR) {
+	        if (byte === CR) {
 	          this.crlfCheck = true;
 	        }
 
 	        // In any case, we can process the line as we reached an
 	        // end-of-line character
-	        this.parseLine(this.buffer.subarray(0, this.pos), this.event);
-
-	        // Remove the processed line from the buffer
-	        this.buffer = this.buffer.subarray(this.pos + 1);
-	        // Reset the position as we removed the processed line from the buffer
-	        this.pos = 0;
+	        this.parseLine(this.readLine(), this.event);
+	        this.consumeCurrentByte();
 	        // A line was processed and this could be the end of the event. We need
 	        // to check if the next line is empty to determine if the event is
 	        // finished.
@@ -27409,7 +27415,7 @@ function requireEventsourceStream () {
 	        continue
 	      }
 
-	      this.pos++;
+	      this.advanceCursor();
 	    }
 
 	    callback();
@@ -27434,64 +27440,53 @@ function requireEventsourceStream () {
 	      return
 	    }
 
-	    let field = '';
-	    let value = '';
+	    let fieldLength = line.length;
+	    let valueStart = line.length;
 
 	    // If the line contains a U+003A COLON character (:)
 	    if (colonPosition !== -1) {
-	      // Collect the characters on the line before the first U+003A COLON
-	      // character (:), and let field be that string.
-	      // TODO: Investigate if there is a more performant way to extract the
-	      // field
-	      // see: https://github.com/nodejs/undici/issues/2630
-	      field = line.subarray(0, colonPosition).toString('utf8');
+	      fieldLength = colonPosition;
 
 	      // Collect the characters on the line after the first U+003A COLON
 	      // character (:), and let value be that string.
 	      // If value starts with a U+0020 SPACE character, remove it from value.
-	      let valueStart = colonPosition + 1;
+	      valueStart = colonPosition + 1;
 	      if (line[valueStart] === SPACE) {
 	        ++valueStart;
 	      }
-	      // TODO: Investigate if there is a more performant way to extract the
-	      // value
-	      // see: https://github.com/nodejs/undici/issues/2630
-	      value = line.subarray(valueStart).toString('utf8');
-
-	      // Otherwise, the string is not empty but does not contain a U+003A COLON
-	      // character (:)
-	    } else {
-	      // Process the field using the steps described below, using the whole
-	      // line as the field name, and the empty string as the field value.
-	      field = line.toString('utf8');
-	      value = '';
 	    }
 
-	    // Modify the event with the field name and value. The value is also
-	    // decoded as UTF-8
-	    switch (field) {
-	      case 'data':
-	        if (event[field] === undefined) {
-	          event[field] = value;
-	        } else {
-	          event[field] += `\n${value}`;
-	        }
-	        break
-	      case 'retry':
-	        if (isASCIINumber(value)) {
-	          event[field] = value;
-	        }
-	        break
-	      case 'id':
-	        if (isValidLastEventId(value)) {
-	          event[field] = value;
-	        }
-	        break
-	      case 'event':
-	        if (value.length > 0) {
-	          event[field] = value;
-	        }
-	        break
+	    if (isFieldName(line, fieldLength, DATA)) {
+	      const value = line.toString('utf8', valueStart);
+
+	      if (event.data === undefined) {
+	        event.data = value;
+	      } else {
+	        event.data += `\n${value}`;
+	      }
+	      return
+	    }
+
+	    if (isFieldName(line, fieldLength, RETRY)) {
+	      if (isASCIINumberBytes(line, valueStart)) {
+	        event.retry = line.toString('utf8', valueStart);
+	      }
+	      return
+	    }
+
+	    if (isFieldName(line, fieldLength, ID)) {
+	      if (isValidLastEventIdBytes(line, valueStart)) {
+	        event.id = line.toString('utf8', valueStart);
+	      }
+	      return
+	    }
+
+	    if (isFieldName(line, fieldLength, EVENT)) {
+	      const value = line.toString('utf8', valueStart);
+
+	      if (value.length > 0) {
+	        event.event = value;
+	      }
 	    }
 	  }
 
@@ -27521,12 +27516,151 @@ function requireEventsourceStream () {
 	  }
 
 	  clearEvent () {
-	    this.event = {
-	      data: undefined,
-	      event: undefined,
-	      id: undefined,
-	      retry: undefined
-	    };
+	    this.event.data = undefined;
+	    this.event.event = undefined;
+	    this.event.id = undefined;
+	    this.event.retry = undefined;
+	  }
+
+	  hasPendingEvent () {
+	    return this.event.data !== undefined ||
+	      this.event.event !== undefined ||
+	      this.event.id !== undefined ||
+	      this.event.retry !== undefined
+	  }
+
+	  hasCurrentByte () {
+	    return this.chunkIndex < this.chunks.length &&
+	      this.pos < this.chunks[this.chunkIndex].length
+	  }
+
+	  currentByte () {
+	    return this.chunks[this.chunkIndex][this.pos]
+	  }
+
+	  consumeCurrentByte () {
+	    this.advanceCursor();
+	    this.syncLineStartToCursor();
+	  }
+
+	  advanceCursor () {
+	    this.pos++;
+
+	    while (this.chunkIndex < this.chunks.length && this.pos >= this.chunks[this.chunkIndex].length) {
+	      this.chunkIndex++;
+	      this.pos = 0;
+	    }
+	  }
+
+	  syncLineStartToCursor () {
+	    this.lineChunkIndex = this.chunkIndex;
+	    this.linePos = this.pos;
+	    this.dropConsumedChunks();
+	  }
+
+	  dropConsumedChunks () {
+	    while (this.lineChunkIndex > 0) {
+	      this.chunks.shift();
+	      this.lineChunkIndex--;
+	      this.chunkIndex--;
+	    }
+
+	    if (this.chunkIndex === this.chunks.length) {
+	      this.chunks.length = 0;
+	      this.chunkIndex = 0;
+	      this.pos = 0;
+	      this.lineChunkIndex = 0;
+	      this.linePos = 0;
+	    }
+	  }
+
+	  readLine () {
+	    if (this.lineChunkIndex === this.chunkIndex) {
+	      return this.chunks[this.chunkIndex].subarray(this.linePos, this.pos)
+	    }
+
+	    const chunks = [];
+	    let length = 0;
+
+	    for (let i = this.lineChunkIndex; i <= this.chunkIndex; i++) {
+	      const chunk = this.chunks[i];
+	      const start = i === this.lineChunkIndex ? this.linePos : 0;
+	      const end = i === this.chunkIndex ? this.pos : chunk.length;
+	      const slice = chunk.subarray(start, end);
+	      length += slice.length;
+	      chunks.push(slice);
+	    }
+
+	    return Buffer.concat(chunks, length)
+	  }
+
+	  peekBufferedByte (offset) {
+	    let chunkIndex = this.lineChunkIndex;
+	    let pos = this.linePos;
+
+	    while (chunkIndex < this.chunks.length) {
+	      const chunk = this.chunks[chunkIndex];
+	      const remaining = chunk.length - pos;
+
+	      if (offset < remaining) {
+	        return chunk[pos + offset]
+	      }
+
+	      offset -= remaining;
+	      chunkIndex++;
+	      pos = 0;
+	    }
+	  }
+
+	  discardLeadingBytes (count) {
+	    while (count > 0 && this.lineChunkIndex < this.chunks.length) {
+	      const chunk = this.chunks[this.lineChunkIndex];
+	      const remaining = chunk.length - this.linePos;
+
+	      if (count < remaining) {
+	        this.linePos += count;
+	        count = 0;
+	      } else {
+	        count -= remaining;
+	        this.lineChunkIndex++;
+	        this.linePos = 0;
+	      }
+	    }
+
+	    this.chunkIndex = this.lineChunkIndex;
+	    this.pos = this.linePos;
+	    this.dropConsumedChunks();
+	  }
+
+	  handleBOM () {
+	    const first = this.peekBufferedByte(0);
+	    const second = this.peekBufferedByte(1);
+	    const third = this.peekBufferedByte(2);
+
+	    if (second === undefined) {
+	      if (first === BOM[0]) {
+	        return true
+	      }
+
+	      this.checkBOM = false;
+	      return true
+	    }
+
+	    if (third === undefined) {
+	      if (first === BOM[0] && second === BOM[1]) {
+	        return true
+	      }
+
+	      this.checkBOM = false;
+	      return false
+	    }
+
+	    if (first === BOM[0] && second === BOM[1] && third === BOM[2]) {
+	      this.discardLeadingBytes(3);
+	    }
+
+	    this.checkBOM = false;
+	    return !this.hasCurrentByte()
 	  }
 	}
 
@@ -28422,12 +28556,12 @@ function info(message) {
 
 var src = {};
 
-var dist$9;
-var hasRequiredDist$9;
+var dist$8;
+var hasRequiredDist$8;
 
-function requireDist$9 () {
-	if (hasRequiredDist$9) return dist$9;
-	hasRequiredDist$9 = 1;
+function requireDist$8 () {
+	if (hasRequiredDist$8) return dist$8;
+	hasRequiredDist$8 = 1;
 	var __defProp = Object.defineProperty;
 	var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
 	var __getOwnPropNames = Object.getOwnPropertyNames;
@@ -28461,7 +28595,7 @@ function requireDist$9 () {
 	  shouldUseGlobalFetchAndWebSocket: () => shouldUseGlobalFetchAndWebSocket,
 	  version: () => version
 	});
-	dist$9 = __toCommonJS(index_exports);
+	dist$8 = __toCommonJS(index_exports);
 
 	// src/functions/lazy.ts
 	function lazy(cb) {
@@ -28573,7 +28707,7 @@ function requireDist$9 () {
 	// src/index.ts
 	var version = "1.2.0";
 	
-	return dist$9;
+	return dist$8;
 }
 
 /******************************************************************************
@@ -29025,7 +29159,7 @@ function requireV10$5 () {
 	 * Types extracted from https://discord.com/developers/docs/topics/gateway
 	 */
 	Object.defineProperty(v10$9, "__esModule", { value: true });
-	v10$9.GatewayRequestChannelInfoField = v10$9.VoiceChannelEffectSendAnimationType = v10$9.GatewayDispatchEvents = v10$9.GatewayIntentBits = v10$9.GatewayCloseCodes = v10$9.GatewayOpcodes = v10$9.GatewayVersion = void 0;
+	v10$9.GatewayRequestChannelInfoField = v10$9.VoiceChannelEffectSendAnimationType = v10$9.GatewayDispatchEvents = v10$9.GatewayCapabilityBits = v10$9.GatewayIntentBits = v10$9.GatewayCloseCodes = v10$9.GatewayOpcodes = v10$9.GatewayVersion = void 0;
 	v10$9.GatewayVersion = '10';
 	/**
 	 * @see {@link https://discord.com/developers/docs/topics/opcodes-and-status-codes#gateway-gateway-opcodes}
@@ -29204,6 +29338,20 @@ function requireV10$5 () {
 	    GatewayIntentBits[GatewayIntentBits["DirectMessagePolls"] = 33554432] = "DirectMessagePolls";
 	})(GatewayIntentBits || (v10$9.GatewayIntentBits = GatewayIntentBits = {}));
 	/**
+	 * @see {@link https://docs.discord.com/developers/events/gateway-events#identify-gateway-capabilities}
+	 */
+	var GatewayCapabilityBits;
+	(function (GatewayCapabilityBits) {
+	    /**
+	     * Opts the client into receiving {@link https://docs.discord.com/developers/resources/channel#channel-object-obfuscated-channels | obfuscated channel metadata} over the Gateway for channels it can't view
+	     *
+	     * @unstable `CHANNEL_OBFUSCATION` is a temporary, testing-only opt-in for channel obfuscation. This opt-in mechanism
+	     * will change before the feature reaches general availability. Obfuscation is then planned to apply to all bots
+	     * automatically, even when they don't provide this capability.
+	     */
+	    GatewayCapabilityBits[GatewayCapabilityBits["ChannelObfuscation"] = 32768] = "ChannelObfuscation";
+	})(GatewayCapabilityBits || (v10$9.GatewayCapabilityBits = GatewayCapabilityBits = {}));
+	/**
 	 * @see {@link https://discord.com/developers/docs/topics/gateway-events#receive-events}
 	 */
 	var GatewayDispatchEvents;
@@ -29315,6 +29463,7 @@ function requireV10$5 () {
 var v10Exports$4 = requireV10$5();
 var mod$5 = /*@__PURE__*/getDefaultExportFromCjs(v10Exports$4);
 
+const GatewayCapabilityBits = mod$5.GatewayCapabilityBits;
 const GatewayCloseCodes = mod$5.GatewayCloseCodes;
 const GatewayDispatchEvents = mod$5.GatewayDispatchEvents;
 const GatewayIntentBits = mod$5.GatewayIntentBits;
@@ -29325,6 +29474,7 @@ const VoiceChannelEffectSendAnimationType = mod$5.VoiceChannelEffectSendAnimatio
 
 var v10$8 = /*#__PURE__*/Object.freeze({
     __proto__: null,
+    GatewayCapabilityBits: GatewayCapabilityBits,
     GatewayCloseCodes: GatewayCloseCodes,
     GatewayDispatchEvents: GatewayDispatchEvents,
     GatewayIntentBits: GatewayIntentBits,
@@ -30372,6 +30522,12 @@ function requireChannel$1 () {
 	     * Whether media download options are hidden.
 	     */
 	    ChannelFlags[ChannelFlags["HideMediaDownloadOptions"] = 32768] = "HideMediaDownloadOptions";
+	    /**
+	     * This channel's metadata has been obfuscated because the current user cannot view it. Only ever set on channels
+	     * received over the {@link https://docs.discord.com/developers/events/gateway | Gateway}; the HTTP API never sets this flag. See
+	     * {@link https://docs.discord.com/developers/resources/channel#channel-object-obfuscated-channels | Obfuscated Channels}.
+	     */
+	    ChannelFlags[ChannelFlags["ChannelObfuscated"] = 131072] = "ChannelObfuscated";
 	    /**
 	     * This channel is a Spoiler Channel i.e. users must opt in to view its contents.
 	     */
@@ -35520,12 +35676,12 @@ function requireV10 () {
 	return v10$a;
 }
 
-var dist$8;
-var hasRequiredDist$8;
+var dist$7;
+var hasRequiredDist$7;
 
-function requireDist$8 () {
-	if (hasRequiredDist$8) return dist$8;
-	hasRequiredDist$8 = 1;
+function requireDist$7 () {
+	if (hasRequiredDist$7) return dist$7;
+	hasRequiredDist$7 = 1;
 	var __defProp = Object.defineProperty;
 	var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
 	var __getOwnPropNames = Object.getOwnPropertyNames;
@@ -35551,7 +35707,7 @@ function requireDist$8 () {
 	  Collection: () => Collection,
 	  version: () => version
 	});
-	dist$8 = __toCommonJS(src_exports);
+	dist$7 = __toCommonJS(src_exports);
 
 	// src/collection.ts
 	var Collection = class _Collection extends Map {
@@ -36087,7 +36243,7 @@ function requireDist$8 () {
 	// src/index.ts
 	var version = "2.1.1";
 	
-	return dist$8;
+	return dist$7;
 }
 
 var cjs$2 = {};
@@ -36302,12 +36458,12 @@ function requireCjs$2 () {
 	return cjs$2;
 }
 
-var dist$7;
-var hasRequiredDist$7;
+var dist$6;
+var hasRequiredDist$6;
 
-function requireDist$7 () {
-	if (hasRequiredDist$7) return dist$7;
-	hasRequiredDist$7 = 1;
+function requireDist$6 () {
+	if (hasRequiredDist$6) return dist$6;
+	hasRequiredDist$6 = 1;
 	var __create = Object.create;
 	var __defProp = Object.defineProperty;
 	var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
@@ -38520,7 +38676,7 @@ function requireDist$7 () {
 	  AbortError: () => AbortError,
 	  AsyncEventEmitter: () => AsyncEventEmitter
 	});
-	dist$7 = __toCommonJS(src_exports);
+	dist$6 = __toCommonJS(src_exports);
 	init_cjs_shims();
 
 	// node_modules/node-inspect-extracted/index.mjs
@@ -39130,10 +39286,10 @@ Emitted 'error' event${ctorInfo} at:
 	  (*! For license information please see inspect.js.LICENSE.txt *)
 	*/
 	
-	return dist$7;
+	return dist$6;
 }
 
-var dist$6 = {};
+var dist$5 = {};
 
 var patternTree = {};
 
@@ -40411,11 +40567,11 @@ function requirePatternTree () {
 	return patternTree;
 }
 
-var hasRequiredDist$6;
+var hasRequiredDist$5;
 
-function requireDist$6 () {
-	if (hasRequiredDist$6) return dist$6;
-	hasRequiredDist$6 = 1;
+function requireDist$5 () {
+	if (hasRequiredDist$5) return dist$5;
+	hasRequiredDist$5 = 1;
 	(function (exports) {
 		Object.defineProperty(exports, "__esModule", { value: true });
 		exports.register = exports.filetypeextension = exports.filetypemime = exports.filetypename = exports.filetypeinfo = void 0;
@@ -40497,8 +40653,8 @@ function requireDist$6 () {
 		    pattern_tree_1.add(typename, signature, additionalInfo, offset);
 		};
 		exports.register = register; 
-	} (dist$6));
-	return dist$6;
+	} (dist$5));
+	return dist$5;
 }
 
 var cjs$1 = {};
@@ -40713,7 +40869,7 @@ function requireWeb () {
 	var import_v102 = requireV10();
 
 	// src/lib/utils/constants.ts
-	var import_util = requireDist$9();
+	var import_util = requireDist$8();
 	var import_v10 = requireV10();
 	var DefaultUserAgent = `DiscordBot (https://discord.js.org, 2.6.3)`;
 	var DefaultUserAgentAppendix = (0, import_util.getUserAgentAppendix)();
@@ -41304,10 +41460,10 @@ ${flattened}` : error.message || flattened || "Unknown Error";
 	};
 
 	// src/lib/REST.ts
-	var import_collection = requireDist$8();
+	var import_collection = requireDist$7();
 	var import_snowflake = /*@__PURE__*/ requireCjs$2();
-	var import_async_event_emitter = /*@__PURE__*/ requireDist$7();
-	var import_magic_bytes = requireDist$6();
+	var import_async_event_emitter = /*@__PURE__*/ requireDist$6();
+	var import_magic_bytes = requireDist$5();
 
 	// src/lib/handlers/Shared.ts
 	var invalidCount = 0;
@@ -43183,12 +43339,12 @@ function requireLodash_snakecase () {
 	return lodash_snakecase;
 }
 
-var dist$5;
-var hasRequiredDist$5;
+var dist$4;
+var hasRequiredDist$4;
 
-function requireDist$5 () {
-	if (hasRequiredDist$5) return dist$5;
-	hasRequiredDist$5 = 1;
+function requireDist$4 () {
+	if (hasRequiredDist$4) return dist$4;
+	hasRequiredDist$4 = 1;
 	var __defProp = Object.defineProperty;
 	var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
 	var __getOwnPropNames = Object.getOwnPropertyNames;
@@ -43214,7 +43370,7 @@ function requireDist$5 () {
 	  Collection: () => Collection,
 	  version: () => version
 	});
-	dist$5 = __toCommonJS(src_exports);
+	dist$4 = __toCommonJS(src_exports);
 
 	// src/collection.ts
 	var Collection = class _Collection extends Map {
@@ -43726,7 +43882,7 @@ function requireDist$5 () {
 	// src/index.ts
 	var version = "1.5.3";
 	
-	return dist$5;
+	return dist$4;
 }
 
 var Colors;
@@ -44209,12 +44365,12 @@ function requireAttachment () {
 
 var BaseChannel = {};
 
-var dist$4;
-var hasRequiredDist$4;
+var dist$3;
+var hasRequiredDist$3;
 
-function requireDist$4 () {
-	if (hasRequiredDist$4) return dist$4;
-	hasRequiredDist$4 = 1;
+function requireDist$3 () {
+	if (hasRequiredDist$3) return dist$3;
+	hasRequiredDist$3 = 1;
 	var __defProp = Object.defineProperty;
 	var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
 	var __getOwnPropNames = Object.getOwnPropertyNames;
@@ -44284,7 +44440,7 @@ function requireDist$4 () {
 	  userMention: () => userMention,
 	  version: () => version
 	});
-	dist$4 = __toCommonJS(index_exports);
+	dist$3 = __toCommonJS(index_exports);
 
 	// src/escapers.ts
 	function escapeMarkdown(text, options = {}) {
@@ -44684,7 +44840,7 @@ ${content}
 	// src/index.ts
 	var version = "0.6.2";
 	
-	return dist$4;
+	return dist$3;
 }
 
 var Base_1;
@@ -45087,7 +45243,7 @@ function requireBaseChannel () {
 	if (hasRequiredBaseChannel) return BaseChannel;
 	hasRequiredBaseChannel = 1;
 
-	const { channelLink, channelMention } = requireDist$4();
+	const { channelLink, channelMention } = requireDist$3();
 	const { DiscordSnowflake } = /*@__PURE__*/ requireCjs$2();
 	const { ChannelType, Routes } = requireV10();
 	const Base = requireBase();
@@ -45593,7 +45749,7 @@ function requireRole () {
 	if (hasRequiredRole) return Role;
 	hasRequiredRole = 1;
 
-	const { roleMention } = requireDist$4();
+	const { roleMention } = requireDist$3();
 	const { DiscordSnowflake } = /*@__PURE__*/ requireCjs$2();
 	const { PermissionFlagsBits } = requireV10();
 	const Base = requireBase();
@@ -46327,7 +46483,7 @@ function requirePermissionOverwriteManager () {
 	hasRequiredPermissionOverwriteManager = 1;
 
 	const process = require$$0$8;
-	const { Collection } = requireDist$5();
+	const { Collection } = requireDist$4();
 	const { OverwriteType, Routes } = requireV10();
 	const CachedManager = requireCachedManager();
 	const { DiscordjsTypeError, ErrorCodes } = requireErrors();
@@ -47086,7 +47242,7 @@ function requireUtil () {
 
 	const { parse } = path;
 	const process = require$$0$8;
-	const { Collection } = requireDist$5();
+	const { Collection } = requireDist$4();
 	const { ChannelType, RouteBases, Routes } = requireV10();
 	const { fetch } = requireUndici();
 	const Colors = requireColors();
@@ -47724,7 +47880,7 @@ function requireTransformers () {
 	if (hasRequiredTransformers) return Transformers;
 	hasRequiredTransformers = 1;
 
-	const { isJSONEncodable } = requireDist$9();
+	const { isJSONEncodable } = requireDist$8();
 	const snakeCase = requireLodash_snakecase();
 	const { resolvePartialEmoji } = requireUtil();
 	const AuthorizingIntegrationOwners = requireAuthorizingIntegrationOwners();
@@ -47865,7 +48021,7 @@ function requireLimitedCollection () {
 	if (hasRequiredLimitedCollection) return LimitedCollection_1;
 	hasRequiredLimitedCollection = 1;
 
-	const { Collection } = requireDist$5();
+	const { Collection } = requireDist$4();
 	const { DiscordjsTypeError, ErrorCodes } = requireErrors();
 
 	/**
@@ -48092,7 +48248,7 @@ function requireOptions () {
 	   *  });
 	   */
 	  static cacheWithLimits(settings = {}) {
-	    const { Collection } = requireDist$5();
+	    const { Collection } = requireDist$4();
 	    const LimitedCollection = requireLimitedCollection();
 
 	    return (managerType, _, manager) => {
@@ -48121,7 +48277,7 @@ function requireOptions () {
 	   * @returns {CacheFactory}
 	   */
 	  static cacheEverything() {
-	    const { Collection } = requireDist$5();
+	    const { Collection } = requireDist$4();
 	    return () => new Collection();
 	  }
 
@@ -48322,7 +48478,7 @@ function requireEmoji () {
 	hasRequiredEmoji = 1;
 
 	const process = require$$0$8;
-	const { formatEmoji } = requireDist$4();
+	const { formatEmoji } = requireDist$3();
 	const { DiscordSnowflake } = /*@__PURE__*/ requireCjs$2();
 	const Base = requireBase();
 
@@ -48448,7 +48604,7 @@ function requireCollector () {
 
 	const EventEmitter = require$$0$2;
 	const { setTimeout, clearTimeout } = require$$1$7;
-	const { Collection } = requireDist$5();
+	const { Collection } = requireDist$4();
 	const { DiscordjsTypeError, ErrorCodes } = requireErrors();
 	const { flatten } = requireUtil();
 
@@ -48987,7 +49143,7 @@ function requireInteractionCollector () {
 	if (hasRequiredInteractionCollector) return InteractionCollector_1;
 	hasRequiredInteractionCollector = 1;
 
-	const { Collection } = requireDist$5();
+	const { Collection } = requireDist$4();
 	const Collector = requireCollector();
 	const Events = requireEvents();
 
@@ -50220,7 +50376,7 @@ function requireInviteStageInstance () {
 	if (hasRequiredInviteStageInstance) return InviteStageInstance_1;
 	hasRequiredInviteStageInstance = 1;
 
-	const { Collection } = requireDist$5();
+	const { Collection } = requireDist$4();
 	const Base = requireBase();
 
 	/**
@@ -50652,7 +50808,7 @@ function requireWelcomeScreen () {
 	if (hasRequiredWelcomeScreen) return WelcomeScreen_1;
 	hasRequiredWelcomeScreen = 1;
 
-	const { Collection } = requireDist$5();
+	const { Collection } = requireDist$4();
 	const { GuildFeature } = requireV10();
 	const Base = requireBase();
 	const WelcomeChannel = requireWelcomeChannel();
@@ -51538,7 +51694,7 @@ function requireBaseInteraction () {
 	hasRequiredBaseInteraction = 1;
 
 	const { deprecate } = require$$0$6;
-	const { Collection } = requireDist$5();
+	const { Collection } = requireDist$4();
 	const { DiscordSnowflake } = /*@__PURE__*/ requireCjs$2();
 	const { InteractionType, ApplicationCommandType, ComponentType } = requireV10();
 	const AuthorizingIntegrationOwners = requireAuthorizingIntegrationOwners();
@@ -52182,7 +52338,7 @@ function requireTeam () {
 	if (hasRequiredTeam) return Team_1;
 	hasRequiredTeam = 1;
 
-	const { Collection } = requireDist$5();
+	const { Collection } = requireDist$4();
 	const { DiscordSnowflake } = /*@__PURE__*/ requireCjs$2();
 	const Base = requireBase();
 	const TeamMember = requireTeamMember();
@@ -52307,7 +52463,7 @@ function requireApplicationCommandPermissionsManager () {
 	if (hasRequiredApplicationCommandPermissionsManager) return ApplicationCommandPermissionsManager_1;
 	hasRequiredApplicationCommandPermissionsManager = 1;
 
-	const { Collection } = requireDist$5();
+	const { Collection } = requireDist$4();
 	const { ApplicationCommandPermissionType, RESTJSONErrorCodes, Routes } = requireV10();
 	const BaseManager = requireBaseManager();
 	const { DiscordjsError, DiscordjsTypeError, ErrorCodes } = requireErrors();
@@ -53444,9 +53600,9 @@ function requireApplicationCommandManager () {
 	if (hasRequiredApplicationCommandManager) return ApplicationCommandManager_1;
 	hasRequiredApplicationCommandManager = 1;
 
-	const { Collection } = requireDist$5();
+	const { Collection } = requireDist$4();
 	const { makeURLSearchParams } = requireWeb();
-	const { isJSONEncodable } = requireDist$9();
+	const { isJSONEncodable } = requireDist$8();
 	const { Routes } = requireV10();
 	const ApplicationCommandPermissionsManager = requireApplicationCommandPermissionsManager();
 	const CachedManager = requireCachedManager();
@@ -53898,7 +54054,7 @@ function requireApplicationEmojiManager () {
 	if (hasRequiredApplicationEmojiManager) return ApplicationEmojiManager_1;
 	hasRequiredApplicationEmojiManager = 1;
 
-	const { Collection } = requireDist$5();
+	const { Collection } = requireDist$4();
 	const { Routes } = requireV10();
 	const CachedManager = requireCachedManager();
 	const { DiscordjsTypeError, ErrorCodes } = requireErrors();
@@ -54237,7 +54393,7 @@ function requireEntitlementManager () {
 	if (hasRequiredEntitlementManager) return EntitlementManager;
 	hasRequiredEntitlementManager = 1;
 
-	const { Collection } = requireDist$5();
+	const { Collection } = requireDist$4();
 	const { makeURLSearchParams } = requireWeb();
 	const { Routes, EntitlementOwnerType } = requireV10();
 	const CachedManager = requireCachedManager();
@@ -54546,7 +54702,7 @@ function requireSubscriptionManager () {
 	if (hasRequiredSubscriptionManager) return SubscriptionManager;
 	hasRequiredSubscriptionManager = 1;
 
-	const { Collection } = requireDist$5();
+	const { Collection } = requireDist$4();
 	const { makeURLSearchParams } = requireWeb();
 	const { Routes } = requireV10();
 	const CachedManager = requireCachedManager();
@@ -54684,7 +54840,7 @@ function requireClientApplication () {
 	if (hasRequiredClientApplication) return ClientApplication_1;
 	hasRequiredClientApplication = 1;
 
-	const { Collection } = requireDist$5();
+	const { Collection } = requireDist$4();
 	const { Routes } = requireV10();
 	const { ActivityInstance } = requireActivityInstance();
 	const { ApplicationRoleConnectionMetadata } = requireApplicationRoleConnectionMetadata();
@@ -55112,7 +55268,7 @@ function requireClientApplication () {
 	return ClientApplication_1;
 }
 
-var dist$3 = {exports: {}};
+var dist$2 = {exports: {}};
 
 var cjs = {};
 
@@ -61009,11 +61165,11 @@ var esm = /*#__PURE__*/Object.freeze({
 
 var require$$5 = /*@__PURE__*/getAugmentedNamespace(esm);
 
-var hasRequiredDist$3;
+var hasRequiredDist$2;
 
-function requireDist$3 () {
-	if (hasRequiredDist$3) return dist$3.exports;
-	hasRequiredDist$3 = 1;
+function requireDist$2 () {
+	if (hasRequiredDist$2) return dist$2.exports;
+	hasRequiredDist$2 = 1;
 	(function (module) {
 		var __create = Object.create;
 		var __defProp = Object.defineProperty;
@@ -61429,7 +61585,7 @@ function requireDist$3 () {
 		};
 
 		// src/index.ts
-		__reExport(index_exports, requireDist$4(), module.exports);
+		__reExport(index_exports, requireDist$3(), module.exports);
 
 		// src/components/Assertions.ts
 		var Assertions_exports2 = {};
@@ -63058,7 +63214,7 @@ function requireDist$3 () {
 		};
 
 		// src/components/textInput/TextInput.ts
-		var import_util = requireDist$9();
+		var import_util = requireDist$8();
 		var import_v1016 = requireV10();
 		var import_fast_deep_equal = __toESM(requireFastDeepEqual());
 		var TextInputBuilder = class extends ComponentBuilder {
@@ -65772,8 +65928,8 @@ function requireDist$3 () {
 		// src/index.ts
 		var version = "1.14.1";
 		
-	} (dist$3));
-	return dist$3.exports;
+	} (dist$2));
+	return dist$2.exports;
 }
 
 var Embed_1;
@@ -65783,7 +65939,7 @@ function requireEmbed () {
 	if (hasRequiredEmbed) return Embed_1;
 	hasRequiredEmbed = 1;
 
-	const { embedLength } = requireDist$3();
+	const { embedLength } = requireDist$2();
 	const isEqual = requireFastDeepEqual();
 
 	/**
@@ -66028,7 +66184,7 @@ function requireMessageMentions () {
 	if (hasRequiredMessageMentions) return MessageMentions_1;
 	hasRequiredMessageMentions = 1;
 
-	const { Collection } = requireDist$5();
+	const { Collection } = requireDist$4();
 	const { FormattingPatterns } = requireV10();
 	const { flatten } = requireUtil();
 
@@ -66333,7 +66489,7 @@ function requireReactionCollector () {
 	if (hasRequiredReactionCollector) return ReactionCollector_1;
 	hasRequiredReactionCollector = 1;
 
-	const { Collection } = requireDist$5();
+	const { Collection } = requireDist$4();
 	const Collector = requireCollector();
 	const Events = requireEvents();
 
@@ -66966,7 +67122,7 @@ function requireGuildEmojiRoleManager () {
 	if (hasRequiredGuildEmojiRoleManager) return GuildEmojiRoleManager_1;
 	hasRequiredGuildEmojiRoleManager = 1;
 
-	const { Collection } = requireDist$5();
+	const { Collection } = requireDist$4();
 	const DataManager = requireDataManager();
 	const { DiscordjsTypeError, ErrorCodes } = requireErrors();
 	const { Role } = requireRole();
@@ -67295,7 +67451,7 @@ function requireReactionUserManager () {
 	if (hasRequiredReactionUserManager) return ReactionUserManager_1;
 	hasRequiredReactionUserManager = 1;
 
-	const { Collection } = requireDist$5();
+	const { Collection } = requireDist$4();
 	const { makeURLSearchParams } = requireWeb();
 	const { ReactionType, Routes } = requireV10();
 	const CachedManager = requireCachedManager();
@@ -67730,7 +67886,7 @@ function requireActionRow () {
 	hasRequiredActionRow = 1;
 
 	const { deprecate } = require$$0$6;
-	const { isJSONEncodable } = requireDist$9();
+	const { isJSONEncodable } = requireDist$8();
 	const Component = requireComponent();
 	const { createComponent } = requireComponents();
 
@@ -67783,8 +67939,8 @@ function requireActionRowBuilder () {
 	if (hasRequiredActionRowBuilder) return ActionRowBuilder_1;
 	hasRequiredActionRowBuilder = 1;
 
-	const { ActionRowBuilder: BuildersActionRow } = requireDist$3();
-	const { isJSONEncodable } = requireDist$9();
+	const { ActionRowBuilder: BuildersActionRow } = requireDist$2();
+	const { isJSONEncodable } = requireDist$8();
 	const { createComponentBuilder } = requireComponents();
 	const { toSnakeCase } = requireTransformers();
 
@@ -67826,8 +67982,8 @@ function requireButtonBuilder () {
 	if (hasRequiredButtonBuilder) return ButtonBuilder_1;
 	hasRequiredButtonBuilder = 1;
 
-	const { ButtonBuilder: BuildersButton } = requireDist$3();
-	const { isJSONEncodable } = requireDist$9();
+	const { ButtonBuilder: BuildersButton } = requireDist$2();
+	const { isJSONEncodable } = requireDist$8();
 	const { toSnakeCase } = requireTransformers();
 	const { resolvePartialEmoji } = requireUtil();
 
@@ -67951,8 +68107,8 @@ function requireChannelSelectMenuBuilder () {
 	if (hasRequiredChannelSelectMenuBuilder) return ChannelSelectMenuBuilder_1;
 	hasRequiredChannelSelectMenuBuilder = 1;
 
-	const { ChannelSelectMenuBuilder: BuildersChannelSelectMenu } = requireDist$3();
-	const { isJSONEncodable } = requireDist$9();
+	const { ChannelSelectMenuBuilder: BuildersChannelSelectMenu } = requireDist$2();
+	const { isJSONEncodable } = requireDist$8();
 	const { toSnakeCase } = requireTransformers();
 
 	/**
@@ -68399,8 +68555,8 @@ function requireMentionableSelectMenuBuilder () {
 	if (hasRequiredMentionableSelectMenuBuilder) return MentionableSelectMenuBuilder_1;
 	hasRequiredMentionableSelectMenuBuilder = 1;
 
-	const { MentionableSelectMenuBuilder: BuildersMentionableSelectMenu } = requireDist$3();
-	const { isJSONEncodable } = requireDist$9();
+	const { MentionableSelectMenuBuilder: BuildersMentionableSelectMenu } = requireDist$2();
+	const { isJSONEncodable } = requireDist$8();
 	const { toSnakeCase } = requireTransformers();
 
 	/**
@@ -68458,8 +68614,8 @@ function requireRoleSelectMenuBuilder () {
 	if (hasRequiredRoleSelectMenuBuilder) return RoleSelectMenuBuilder_1;
 	hasRequiredRoleSelectMenuBuilder = 1;
 
-	const { RoleSelectMenuBuilder: BuildersRoleSelectMenu } = requireDist$3();
-	const { isJSONEncodable } = requireDist$9();
+	const { RoleSelectMenuBuilder: BuildersRoleSelectMenu } = requireDist$2();
+	const { isJSONEncodable } = requireDist$8();
 	const { toSnakeCase } = requireTransformers();
 
 	/**
@@ -68604,8 +68760,8 @@ function requireStringSelectMenuBuilder () {
 	if (hasRequiredStringSelectMenuBuilder) return StringSelectMenuBuilder_1;
 	hasRequiredStringSelectMenuBuilder = 1;
 
-	const { SelectMenuBuilder: BuildersSelectMenu, normalizeArray } = requireDist$3();
-	const { isJSONEncodable } = requireDist$9();
+	const { SelectMenuBuilder: BuildersSelectMenu, normalizeArray } = requireDist$2();
+	const { isJSONEncodable } = requireDist$8();
 	const { toSnakeCase } = requireTransformers();
 	const { resolvePartialEmoji } = requireUtil();
 
@@ -68747,8 +68903,8 @@ function requireTextInputBuilder () {
 	if (hasRequiredTextInputBuilder) return TextInputBuilder_1;
 	hasRequiredTextInputBuilder = 1;
 
-	const { TextInputBuilder: BuildersTextInput } = requireDist$3();
-	const { isJSONEncodable } = requireDist$9();
+	const { TextInputBuilder: BuildersTextInput } = requireDist$2();
+	const { isJSONEncodable } = requireDist$8();
 	const { toSnakeCase } = requireTransformers();
 
 	/**
@@ -68880,8 +69036,8 @@ function requireUserSelectMenuBuilder () {
 	if (hasRequiredUserSelectMenuBuilder) return UserSelectMenuBuilder_1;
 	hasRequiredUserSelectMenuBuilder = 1;
 
-	const { UserSelectMenuBuilder: BuildersUserSelectMenu } = requireDist$3();
-	const { isJSONEncodable } = requireDist$9();
+	const { UserSelectMenuBuilder: BuildersUserSelectMenu } = requireDist$2();
+	const { isJSONEncodable } = requireDist$8();
 	const { toSnakeCase } = requireTransformers();
 
 	/**
@@ -68938,7 +69094,7 @@ function requireComponents () {
 	if (hasRequiredComponents) return Components;
 	hasRequiredComponents = 1;
 
-	const { ComponentBuilder } = requireDist$3();
+	const { ComponentBuilder } = requireDist$2();
 	const { ComponentType } = requireV10();
 
 	/**
@@ -69295,8 +69451,8 @@ function requireMessage () {
 	if (hasRequiredMessage) return Message;
 	hasRequiredMessage = 1;
 
-	const { Collection } = requireDist$5();
-	const { messageLink } = requireDist$4();
+	const { Collection } = requireDist$4();
+	const { messageLink } = requireDist$3();
 	const { DiscordSnowflake } = /*@__PURE__*/ requireCjs$2();
 	const {
 	  InteractionType,
@@ -70466,7 +70622,7 @@ function requireWebhook () {
 	hasRequiredWebhook = 1;
 
 	const { makeURLSearchParams } = requireWeb();
-	const { lazy } = requireDist$9();
+	const { lazy } = requireDist$8();
 	const { DiscordSnowflake } = /*@__PURE__*/ requireCjs$2();
 	const { Routes, WebhookType } = requireV10();
 	const MessagePayload = requireMessagePayload();
@@ -71395,7 +71551,7 @@ function requireGuildMemberRoleManager () {
 	if (hasRequiredGuildMemberRoleManager) return GuildMemberRoleManager_1;
 	hasRequiredGuildMemberRoleManager = 1;
 
-	const { Collection } = requireDist$5();
+	const { Collection } = requireDist$4();
 	const { Routes } = requireV10();
 	const DataManager = requireDataManager();
 	const { DiscordjsTypeError, ErrorCodes } = requireErrors();
@@ -72286,7 +72442,7 @@ function requireMessageManager () {
 	hasRequiredMessageManager = 1;
 
 	const process = require$$0$8;
-	const { Collection } = requireDist$5();
+	const { Collection } = requireDist$4();
 	const { makeURLSearchParams } = requireWeb();
 	const { Routes } = requireV10();
 	const CachedManager = requireCachedManager();
@@ -72729,7 +72885,7 @@ function requireMessagePayload () {
 	hasRequiredMessagePayload = 1;
 
 	const { Buffer } = require$$0$1;
-	const { lazy, isJSONEncodable } = requireDist$9();
+	const { lazy, isJSONEncodable } = requireDist$8();
 	const { DiscordSnowflake } = /*@__PURE__*/ requireCjs$2();
 	const { MessageFlags, MessageReferenceType } = requireV10();
 	const { DiscordjsError, DiscordjsRangeError, ErrorCodes } = requireErrors();
@@ -73121,7 +73277,7 @@ function requireTextBasedChannel () {
 	if (hasRequiredTextBasedChannel) return TextBasedChannel_1;
 	hasRequiredTextBasedChannel = 1;
 
-	const { Collection } = requireDist$5();
+	const { Collection } = requireDist$4();
 	const { DiscordSnowflake } = /*@__PURE__*/ requireCjs$2();
 	const { InteractionType, Routes } = requireV10();
 	const { DiscordjsTypeError, DiscordjsError, ErrorCodes } = requireErrors();
@@ -73616,7 +73772,7 @@ function requireUser () {
 	if (hasRequiredUser) return User_1;
 	hasRequiredUser = 1;
 
-	const { userMention } = requireDist$4();
+	const { userMention } = requireDist$3();
 	const { calculateUserDefaultAvatarIndex } = requireWeb();
 	const { DiscordSnowflake } = /*@__PURE__*/ requireCjs$2();
 	const Base = requireBase();
@@ -74128,7 +74284,7 @@ function requirePollAnswerVoterManager () {
 	if (hasRequiredPollAnswerVoterManager) return PollAnswerVoterManager;
 	hasRequiredPollAnswerVoterManager = 1;
 
-	const { Collection } = requireDist$5();
+	const { Collection } = requireDist$4();
 	const { makeURLSearchParams } = requireWeb();
 	const { Routes } = requireV10();
 	const CachedManager = requireCachedManager();
@@ -74306,7 +74462,7 @@ function requirePoll () {
 	if (hasRequiredPoll) return Poll;
 	hasRequiredPoll = 1;
 
-	const { Collection } = requireDist$5();
+	const { Collection } = requireDist$4();
 	const Base = requireBase();
 	const { PollAnswer } = requirePollAnswer();
 	const { DiscordjsError } = requireDJSError();
@@ -75264,7 +75420,7 @@ function requireDMChannel () {
 	if (hasRequiredDMChannel) return DMChannel_1;
 	hasRequiredDMChannel = 1;
 
-	const { userMention } = requireDist$4();
+	const { userMention } = requireDist$3();
 	const { ChannelType } = requireV10();
 	const { BaseChannel } = requireBaseChannel();
 	const TextBasedChannel = requireTextBasedChannel();
@@ -75932,7 +76088,7 @@ function requireThreadMemberManager () {
 	hasRequiredThreadMemberManager = 1;
 
 	const process = require$$0$8;
-	const { Collection } = requireDist$5();
+	const { Collection } = requireDist$4();
 	const { makeURLSearchParams } = requireWeb();
 	const { Routes } = requireV10();
 	const CachedManager = requireCachedManager();
@@ -76144,7 +76300,7 @@ function requireThreadChannel () {
 	hasRequiredThreadChannel = 1;
 
 	const { DiscordAPIError } = requireWeb();
-	const { lazy } = requireDist$9();
+	const { lazy } = requireDist$8();
 	const { RESTJSONErrorCodes, ChannelFlags, ChannelType, PermissionFlagsBits, Routes } = requireV10();
 	const { BaseChannel } = requireBaseChannel();
 	const getThreadOnlyChannel = lazy(() => requireThreadOnlyChannel());
@@ -76763,7 +76919,7 @@ function requireThreadManager () {
 	if (hasRequiredThreadManager) return ThreadManager_1;
 	hasRequiredThreadManager = 1;
 
-	const { Collection } = requireDist$5();
+	const { Collection } = requireDist$4();
 	const { makeURLSearchParams } = requireWeb();
 	const { Routes } = requireV10();
 	const CachedManager = requireCachedManager();
@@ -77307,7 +77463,7 @@ function requireBaseGuildVoiceChannel () {
 	if (hasRequiredBaseGuildVoiceChannel) return BaseGuildVoiceChannel_1;
 	hasRequiredBaseGuildVoiceChannel = 1;
 
-	const { Collection } = requireDist$5();
+	const { Collection } = requireDist$4();
 	const { PermissionFlagsBits } = requireV10();
 	const GuildChannel = requireGuildChannel();
 	const TextBasedChannel = requireTextBasedChannel();
@@ -78100,7 +78256,7 @@ function requireChannels () {
 	if (hasRequiredChannels) return Channels;
 	hasRequiredChannels = 1;
 
-	const { lazy } = requireDist$9();
+	const { lazy } = requireDist$8();
 	const { ChannelType } = requireV10();
 
 	const getCategoryChannel = lazy(() => requireCategoryChannel());
@@ -78418,7 +78574,7 @@ function requireAutoModerationRule () {
 	if (hasRequiredAutoModerationRule) return AutoModerationRule_1;
 	hasRequiredAutoModerationRule = 1;
 
-	const { Collection } = requireDist$5();
+	const { Collection } = requireDist$4();
 	const Base = requireBase();
 	const { _transformAPIAutoModerationAction } = requireTransformers();
 
@@ -78717,7 +78873,7 @@ function requireGuildOnboardingPromptOption () {
 	if (hasRequiredGuildOnboardingPromptOption) return GuildOnboardingPromptOption;
 	hasRequiredGuildOnboardingPromptOption = 1;
 
-	const { Collection } = requireDist$5();
+	const { Collection } = requireDist$4();
 	const Base = requireBase();
 	const { Emoji } = requireEmoji();
 
@@ -78810,7 +78966,7 @@ function requireGuildOnboardingPrompt () {
 	if (hasRequiredGuildOnboardingPrompt) return GuildOnboardingPrompt;
 	hasRequiredGuildOnboardingPrompt = 1;
 
-	const { Collection } = requireDist$5();
+	const { Collection } = requireDist$4();
 	const Base = requireBase();
 	const { GuildOnboardingPromptOption } = requireGuildOnboardingPromptOption();
 
@@ -81408,7 +81564,7 @@ function requireInteractionCallbackResource () {
 	if (hasRequiredInteractionCallbackResource) return InteractionCallbackResource_1;
 	hasRequiredInteractionCallbackResource = 1;
 
-	const { lazy } = requireDist$9();
+	const { lazy } = requireDist$8();
 
 	const getMessage = lazy(() => requireMessage().Message);
 
@@ -81622,7 +81778,7 @@ function requireInteractionResponses () {
 	const process = require$$0$8;
 	const { deprecate } = require$$0$6;
 	const { makeURLSearchParams } = requireWeb();
-	const { isJSONEncodable } = requireDist$9();
+	const { isJSONEncodable } = requireDist$8();
 	const { InteractionResponseType, MessageFlags, Routes, InteractionType } = requireV10();
 	const { DiscordjsError, ErrorCodes } = requireErrors();
 	const MessageFlagsBitField = requireMessageFlagsBitField();
@@ -82121,7 +82277,7 @@ function requireMessageComponentInteraction () {
 	if (hasRequiredMessageComponentInteraction) return MessageComponentInteraction_1;
 	hasRequiredMessageComponentInteraction = 1;
 
-	const { lazy } = requireDist$9();
+	const { lazy } = requireDist$8();
 	const BaseInteraction = requireBaseInteraction();
 	const InteractionWebhook = requireInteractionWebhook();
 	const InteractionResponses = requireInteractionResponses();
@@ -82256,7 +82412,7 @@ function requireChannelSelectMenuInteraction () {
 	if (hasRequiredChannelSelectMenuInteraction) return ChannelSelectMenuInteraction_1;
 	hasRequiredChannelSelectMenuInteraction = 1;
 
-	const { Collection } = requireDist$5();
+	const { Collection } = requireDist$4();
 	const MessageComponentInteraction = requireMessageComponentInteraction();
 
 	/**
@@ -82523,7 +82679,7 @@ function requireMentionableSelectMenuInteraction () {
 	if (hasRequiredMentionableSelectMenuInteraction) return MentionableSelectMenuInteraction_1;
 	hasRequiredMentionableSelectMenuInteraction = 1;
 
-	const { Collection } = requireDist$5();
+	const { Collection } = requireDist$4();
 	const MessageComponentInteraction = requireMessageComponentInteraction();
 	const Events = requireEvents();
 
@@ -82602,7 +82758,7 @@ function requireContextMenuCommandInteraction () {
 	if (hasRequiredContextMenuCommandInteraction) return ContextMenuCommandInteraction_1;
 	hasRequiredContextMenuCommandInteraction = 1;
 
-	const { lazy } = requireDist$9();
+	const { lazy } = requireDist$8();
 	const { ApplicationCommandOptionType } = requireV10();
 	const CommandInteraction = requireCommandInteraction();
 	const CommandInteractionOptionResolver = requireCommandInteractionOptionResolver();
@@ -82703,7 +82859,7 @@ function requireModalSubmitFields () {
 	if (hasRequiredModalSubmitFields) return ModalSubmitFields_1;
 	hasRequiredModalSubmitFields = 1;
 
-	const { Collection } = requireDist$5();
+	const { Collection } = requireDist$4();
 	const { ComponentType } = requireV10();
 	const { DiscordjsTypeError, ErrorCodes } = requireErrors();
 
@@ -82974,8 +83130,8 @@ function requireModalSubmitInteraction () {
 	if (hasRequiredModalSubmitInteraction) return ModalSubmitInteraction_1;
 	hasRequiredModalSubmitInteraction = 1;
 
-	const { Collection } = requireDist$5();
-	const { lazy } = requireDist$9();
+	const { Collection } = requireDist$4();
+	const { lazy } = requireDist$8();
 	const BaseInteraction = requireBaseInteraction();
 	const InteractionWebhook = requireInteractionWebhook();
 	const ModalSubmitFields = requireModalSubmitFields();
@@ -83276,7 +83432,7 @@ function requireRoleSelectMenuInteraction () {
 	if (hasRequiredRoleSelectMenuInteraction) return RoleSelectMenuInteraction_1;
 	hasRequiredRoleSelectMenuInteraction = 1;
 
-	const { Collection } = requireDist$5();
+	const { Collection } = requireDist$4();
 	const MessageComponentInteraction = requireMessageComponentInteraction();
 
 	/**
@@ -83383,7 +83539,7 @@ function requireUserSelectMenuInteraction () {
 	if (hasRequiredUserSelectMenuInteraction) return UserSelectMenuInteraction_1;
 	hasRequiredUserSelectMenuInteraction = 1;
 
-	const { Collection } = requireDist$5();
+	const { Collection } = requireDist$4();
 	const MessageComponentInteraction = requireMessageComponentInteraction();
 	const Events = requireEvents();
 
@@ -83719,7 +83875,7 @@ function requireMessageDeleteBulk () {
 	if (hasRequiredMessageDeleteBulk) return MessageDeleteBulk;
 	hasRequiredMessageDeleteBulk = 1;
 
-	const { Collection } = requireDist$5();
+	const { Collection } = requireDist$4();
 	const Action = requireAction();
 	const Events = requireEvents();
 
@@ -84347,7 +84503,7 @@ function requireThreadListSync () {
 	if (hasRequiredThreadListSync) return ThreadListSync;
 	hasRequiredThreadListSync = 1;
 
-	const { Collection } = requireDist$5();
+	const { Collection } = requireDist$4();
 	const Action = requireAction();
 	const Events = requireEvents();
 
@@ -84453,7 +84609,7 @@ function requireThreadMembersUpdate () {
 	if (hasRequiredThreadMembersUpdate) return ThreadMembersUpdate;
 	hasRequiredThreadMembersUpdate = 1;
 
-	const { Collection } = requireDist$5();
+	const { Collection } = requireDist$4();
 	const Action = requireAction();
 	const Events = requireEvents();
 
@@ -84905,12 +85061,12 @@ function requireClientVoiceManager () {
 	return ClientVoiceManager_1;
 }
 
-var dist$2;
-var hasRequiredDist$2;
+var dist$1;
+var hasRequiredDist$1;
 
-function requireDist$2 () {
-	if (hasRequiredDist$2) return dist$2;
-	hasRequiredDist$2 = 1;
+function requireDist$1 () {
+	if (hasRequiredDist$1) return dist$1;
+	hasRequiredDist$1 = 1;
 	var __defProp = Object.defineProperty;
 	var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
 	var __getOwnPropNames = Object.getOwnPropertyNames;
@@ -84936,7 +85092,7 @@ function requireDist$2 () {
 	  Collection: () => Collection,
 	  version: () => version
 	});
-	dist$2 = __toCommonJS(src_exports);
+	dist$1 = __toCommonJS(src_exports);
 
 	// src/collection.ts
 	var Collection = class _Collection extends Map {
@@ -85472,7 +85628,7 @@ function requireDist$2 () {
 	// src/index.ts
 	var version = "2.1.1";
 	
-	return dist$2;
+	return dist$1;
 }
 
 var bufferUtil = {exports: {}};
@@ -90536,12 +90692,12 @@ function requireWs () {
 	return ws;
 }
 
-var dist$1;
-var hasRequiredDist$1;
+var dist;
+var hasRequiredDist;
 
-function requireDist$1 () {
-	if (hasRequiredDist$1) return dist$1;
-	hasRequiredDist$1 = 1;
+function requireDist () {
+	if (hasRequiredDist) return dist;
+	hasRequiredDist = 1;
 	var __create = Object.create;
 	var __defProp = Object.defineProperty;
 	var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
@@ -90598,7 +90754,7 @@ function requireDist$1 () {
 	  managerToFetchingStrategyOptions: () => managerToFetchingStrategyOptions,
 	  version: () => version
 	});
-	dist$1 = __toCommonJS(src_exports);
+	dist = __toCommonJS(src_exports);
 
 	// src/strategies/context/IContextFetchingStrategy.ts
 	async function managerToFetchingStrategyOptions(manager) {
@@ -90655,13 +90811,13 @@ function requireDist$1 () {
 
 	// src/strategies/context/WorkerContextFetchingStrategy.ts
 	var import_node_worker_threads2 = require$$0$d;
-	var import_collection2 = requireDist$2();
+	var import_collection2 = requireDist$1();
 
 	// src/strategies/sharding/WorkerShardingStrategy.ts
 	var import_node_events = events$1;
 	var import_node_path = path$1;
 	var import_node_worker_threads = require$$0$d;
-	var import_collection = requireDist$2();
+	var import_collection = requireDist$1();
 	var WorkerSendPayloadOp = /* @__PURE__ */ ((WorkerSendPayloadOp2) => {
 	  WorkerSendPayloadOp2[WorkerSendPayloadOp2["Connect"] = 0] = "Connect";
 	  WorkerSendPayloadOp2[WorkerSendPayloadOp2["Destroy"] = 1] = "Destroy";
@@ -90993,7 +91149,7 @@ function requireDist$1 () {
 	};
 
 	// src/strategies/sharding/SimpleShardingStrategy.ts
-	var import_collection6 = requireDist$2();
+	var import_collection6 = requireDist$1();
 
 	// src/ws/WebSocketShard.ts
 	var import_node_buffer = require$$0$a;
@@ -91003,22 +91159,22 @@ function requireDist$1 () {
 	var import_node_url = require$$7$1;
 	var import_node_util = require$$6$1;
 	var import_node_zlib = require$$0$9;
-	var import_collection5 = requireDist$2();
-	var import_util2 = requireDist$9();
+	var import_collection5 = requireDist$1();
+	var import_util2 = requireDist$8();
 	var import_async_queue2 = /*@__PURE__*/ requireCjs$1();
-	var import_async_event_emitter = /*@__PURE__*/ requireDist$7();
+	var import_async_event_emitter = /*@__PURE__*/ requireDist$6();
 	var import_v102 = requireV10();
 	var import_ws = requireWs();
 
 	// src/utils/constants.ts
 	var import_node_process = __toESM(require$$15);
-	var import_collection4 = requireDist$2();
-	var import_util = requireDist$9();
+	var import_collection4 = requireDist$1();
+	var import_util = requireDist$8();
 	var import_v10 = requireV10();
 
 	// src/throttling/SimpleIdentifyThrottler.ts
 	var import_promises = require$$6$2;
-	var import_collection3 = requireDist$2();
+	var import_collection3 = requireDist$1();
 	var import_async_queue = /*@__PURE__*/ requireCjs$1();
 	var SimpleIdentifyThrottler = class {
 	  constructor(maxConcurrency) {
@@ -91773,7 +91929,7 @@ function requireDist$1 () {
 
 	// src/utils/WorkerBootstrapper.ts
 	var import_node_worker_threads3 = require$$0$d;
-	var import_collection7 = requireDist$2();
+	var import_collection7 = requireDist$1();
 	var WorkerBootstrapper = class {
 	  static {
 	    __name(this, "WorkerBootstrapper");
@@ -91896,9 +92052,9 @@ function requireDist$1 () {
 	};
 
 	// src/ws/WebSocketManager.ts
-	var import_util3 = requireDist$9();
-	var import_util4 = requireDist$9();
-	var import_async_event_emitter2 = /*@__PURE__*/ requireDist$7();
+	var import_util3 = requireDist$8();
+	var import_util4 = requireDist$8();
+	var import_async_event_emitter2 = /*@__PURE__*/ requireDist$6();
 	var import_v103 = requireV10();
 	(0, import_util4.polyfillDispose)();
 	var WebSocketManager = class extends import_async_event_emitter2.AsyncEventEmitter {
@@ -92018,7 +92174,7 @@ function requireDist$1 () {
 	// src/index.ts
 	var version = "1.2.3";
 	
-	return dist$1;
+	return dist;
 }
 
 var WebSocketShardEvents;
@@ -92606,7 +92762,7 @@ function requireGUILD_MEMBERS_CHUNK () {
 	if (hasRequiredGUILD_MEMBERS_CHUNK) return GUILD_MEMBERS_CHUNK;
 	hasRequiredGUILD_MEMBERS_CHUNK = 1;
 
-	const { Collection } = requireDist$5();
+	const { Collection } = requireDist$4();
 	const Events = requireEvents();
 
 	GUILD_MEMBERS_CHUNK = (client, { d: data }) => {
@@ -92811,7 +92967,7 @@ function requireGUILD_SOUNDBOARD_SOUNDS_UPDATE () {
 	if (hasRequiredGUILD_SOUNDBOARD_SOUNDS_UPDATE) return GUILD_SOUNDBOARD_SOUNDS_UPDATE;
 	hasRequiredGUILD_SOUNDBOARD_SOUNDS_UPDATE = 1;
 
-	const { Collection } = requireDist$5();
+	const { Collection } = requireDist$4();
 	const Events = requireEvents();
 
 	GUILD_SOUNDBOARD_SOUNDS_UPDATE = (client, { d: data }) => {
@@ -93431,7 +93587,7 @@ function requireSOUNDBOARD_SOUNDS () {
 	if (hasRequiredSOUNDBOARD_SOUNDS) return SOUNDBOARD_SOUNDS;
 	hasRequiredSOUNDBOARD_SOUNDS = 1;
 
-	const { Collection } = requireDist$5();
+	const { Collection } = requireDist$4();
 	const Events = requireEvents();
 
 	SOUNDBOARD_SOUNDS = (client, { d: data }) => {
@@ -93954,13 +94110,13 @@ function requireWebSocketManager () {
 	const EventEmitter = require$$0$2;
 	const process = require$$0$8;
 	const { setImmediate } = require$$1$7;
-	const { Collection } = requireDist$5();
+	const { Collection } = requireDist$4();
 	const {
 	  WebSocketManager: WSWebSocketManager,
 	  WebSocketShardEvents: WSWebSocketShardEvents,
 	  CompressionMethod,
 	  CloseCodes,
-	} = requireDist$1();
+	} = requireDist();
 	const { GatewayCloseCodes, GatewayDispatchEvents } = requireV10();
 	const WebSocketShard = requireWebSocketShard();
 	const PacketHandlers = requireHandlers();
@@ -94603,7 +94759,7 @@ function requireShardClientUtil () {
 	hasRequiredShardClientUtil = 1;
 
 	const process = require$$0$8;
-	const { calculateShardId } = requireDist$9();
+	const { calculateShardId } = requireDist$8();
 	const { DiscordjsError, DiscordjsTypeError, ErrorCodes } = requireErrors();
 	const Events = requireEvents();
 	const { makeError, makePlainError } = requireUtil();
@@ -94904,7 +95060,7 @@ function requireGuildAuditLogs () {
 	if (hasRequiredGuildAuditLogs) return GuildAuditLogs_1;
 	hasRequiredGuildAuditLogs = 1;
 
-	const { Collection } = requireDist$5();
+	const { Collection } = requireDist$4();
 	const ApplicationCommand = requireApplicationCommand();
 	const GuildAuditLogsEntry = requireGuildAuditLogsEntry();
 	const Integration = requireIntegration();
@@ -95004,7 +95160,7 @@ function requireGuildOnboarding () {
 	if (hasRequiredGuildOnboarding) return GuildOnboarding;
 	hasRequiredGuildOnboarding = 1;
 
-	const { Collection } = requireDist$5();
+	const { Collection } = requireDist$4();
 	const Base = requireBase();
 	const { GuildOnboardingPrompt } = requireGuildOnboardingPrompt();
 
@@ -95111,7 +95267,7 @@ function requireGuildPreview () {
 	if (hasRequiredGuildPreview) return GuildPreview_1;
 	hasRequiredGuildPreview = 1;
 
-	const { Collection } = requireDist$5();
+	const { Collection } = requireDist$4();
 	const { DiscordSnowflake } = /*@__PURE__*/ requireCjs$2();
 	const { Routes } = requireV10();
 	const Base = requireBase();
@@ -95312,7 +95468,7 @@ function requireAutoModerationRuleManager () {
 	if (hasRequiredAutoModerationRuleManager) return AutoModerationRuleManager_1;
 	hasRequiredAutoModerationRuleManager = 1;
 
-	const { Collection } = requireDist$5();
+	const { Collection } = requireDist$4();
 	const { Routes } = requireV10();
 	const CachedManager = requireCachedManager();
 	const AutoModerationRule = requireAutoModerationRule();
@@ -95649,7 +95805,7 @@ function requireGuildBanManager () {
 	hasRequiredGuildBanManager = 1;
 
 	const process = require$$0$8;
-	const { Collection } = requireDist$5();
+	const { Collection } = requireDist$4();
 	const { makeURLSearchParams } = requireWeb();
 	const { Routes } = requireV10();
 	const CachedManager = requireCachedManager();
@@ -95906,7 +96062,7 @@ function requireGuildChannelManager () {
 	hasRequiredGuildChannelManager = 1;
 
 	const process = require$$0$8;
-	const { Collection } = requireDist$5();
+	const { Collection } = requireDist$4();
 	const { ChannelType, Routes } = requireV10();
 	const CachedManager = requireCachedManager();
 	const GuildTextThreadManager = requireGuildTextThreadManager();
@@ -96432,7 +96588,7 @@ function requireGuildEmojiManager () {
 	if (hasRequiredGuildEmojiManager) return GuildEmojiManager_1;
 	hasRequiredGuildEmojiManager = 1;
 
-	const { Collection } = requireDist$5();
+	const { Collection } = requireDist$4();
 	const { Routes, PermissionFlagsBits } = requireV10();
 	const BaseGuildEmojiManager = requireBaseGuildEmojiManager();
 	const { DiscordjsError, DiscordjsTypeError, ErrorCodes } = requireErrors();
@@ -96614,7 +96770,7 @@ function requireGuildInviteManager () {
 	if (hasRequiredGuildInviteManager) return GuildInviteManager_1;
 	hasRequiredGuildInviteManager = 1;
 
-	const { Collection } = requireDist$5();
+	const { Collection } = requireDist$4();
 	const { Routes } = requireV10();
 	const CachedManager = requireCachedManager();
 	const { DiscordjsError, ErrorCodes } = requireErrors();
@@ -96839,9 +96995,9 @@ function requireGuildMemberManager () {
 
 	const { process } = require$$0$8;
 	const { setTimeout, clearTimeout } = require$$1$7;
-	const { Collection } = requireDist$5();
+	const { Collection } = requireDist$4();
 	const { makeURLSearchParams } = requireWeb();
-	const { GatewayRateLimitError } = requireDist$9();
+	const { GatewayRateLimitError } = requireDist$8();
 	const { DiscordSnowflake } = /*@__PURE__*/ requireCjs$2();
 	const { Routes, GatewayOpcodes, GatewayDispatchEvents } = requireV10();
 	const CachedManager = requireCachedManager();
@@ -97483,7 +97639,7 @@ function requireGuildScheduledEventManager () {
 	if (hasRequiredGuildScheduledEventManager) return GuildScheduledEventManager_1;
 	hasRequiredGuildScheduledEventManager = 1;
 
-	const { Collection } = requireDist$5();
+	const { Collection } = requireDist$4();
 	const { makeURLSearchParams } = requireWeb();
 	const { GuildScheduledEventEntityType, Routes } = requireV10();
 	const CachedManager = requireCachedManager();
@@ -98020,15 +98176,15 @@ function requireGuildSoundboardSoundManager () {
 	if (hasRequiredGuildSoundboardSoundManager) return GuildSoundboardSoundManager;
 	hasRequiredGuildSoundboardSoundManager = 1;
 
-	const { Collection } = requireDist$5();
-	const { lazy } = requireDist$9();
+	const { Collection } = requireDist$4();
+	const { lazy } = requireDist$8();
 	const { Routes } = requireV10();
 	const CachedManager = requireCachedManager();
 	const { DiscordjsTypeError, ErrorCodes } = requireErrors();
 	const { SoundboardSound } = requireSoundboardSound();
 	const { resolveBase64, resolveFile } = requireDataResolver();
 
-	const fileTypeMime = lazy(() => requireDist$6().filetypemime);
+	const fileTypeMime = lazy(() => requireDist$5().filetypemime);
 
 	/**
 	 * Manages API methods for Soundboard Sounds and stores their cache.
@@ -98242,7 +98398,7 @@ function requireGuildStickerManager () {
 	if (hasRequiredGuildStickerManager) return GuildStickerManager_1;
 	hasRequiredGuildStickerManager = 1;
 
-	const { Collection } = requireDist$5();
+	const { Collection } = requireDist$4();
 	const { Routes } = requireV10();
 	const CachedManager = requireCachedManager();
 	const { DiscordjsTypeError, ErrorCodes } = requireErrors();
@@ -98927,7 +99083,7 @@ function requireRoleManager () {
 	hasRequiredRoleManager = 1;
 
 	const process = require$$0$8;
-	const { Collection } = requireDist$5();
+	const { Collection } = requireDist$4();
 	const { DiscordAPIError } = requireWeb();
 	const { RESTJSONErrorCodes, Routes } = requireV10();
 	const CachedManager = requireCachedManager();
@@ -99685,7 +99841,7 @@ function requireGuild () {
 	if (hasRequiredGuild) return Guild;
 	hasRequiredGuild = 1;
 
-	const { Collection } = requireDist$5();
+	const { Collection } = requireDist$4();
 	const { makeURLSearchParams } = requireWeb();
 	const { DiscordSnowflake } = /*@__PURE__*/ requireCjs$2();
 	const { ChannelType, GuildPremiumTier, Routes, GuildFeature } = requireV10();
@@ -101238,7 +101394,7 @@ function requireGuildManager () {
 
 	const process = require$$0$8;
 	const { setTimeout, clearTimeout } = require$$1$7;
-	const { Collection } = requireDist$5();
+	const { Collection } = requireDist$4();
 	const { makeURLSearchParams } = requireWeb();
 	const { GatewayOpcodes, Routes, RouteBases } = requireV10();
 	const CachedManager = requireCachedManager();
@@ -101903,7 +102059,7 @@ function requireStickerPack () {
 	if (hasRequiredStickerPack) return StickerPack_1;
 	hasRequiredStickerPack = 1;
 
-	const { Collection } = requireDist$5();
+	const { Collection } = requireDist$4();
 	const { DiscordSnowflake } = /*@__PURE__*/ requireCjs$2();
 	const Base = requireBase();
 	const { Sticker } = requireSticker();
@@ -102167,7 +102323,7 @@ function requireWidget () {
 	if (hasRequiredWidget) return Widget_1;
 	hasRequiredWidget = 1;
 
-	const { Collection } = requireDist$5();
+	const { Collection } = requireDist$4();
 	const { Routes } = requireV10();
 	const Base = requireBase();
 	const WidgetMember = requireWidgetMember();
@@ -102810,7 +102966,7 @@ function requireClient () {
 	hasRequiredClient = 1;
 
 	const process = require$$0$8;
-	const { Collection } = requireDist$5();
+	const { Collection } = requireDist$4();
 	const { makeURLSearchParams } = requireWeb();
 	const { OAuth2Scopes, Routes } = requireV10();
 	const BaseClient = requireBaseClient();
@@ -103998,7 +104154,7 @@ function requireShardingManager () {
 	const path$1 = path;
 	const process = require$$0$8;
 	const { setTimeout: sleep } = require$$4$1;
-	const { Collection } = requireDist$5();
+	const { Collection } = requireDist$4();
 	const Shard = requireShard();
 	const { DiscordjsError, DiscordjsTypeError, DiscordjsRangeError, ErrorCodes } = requireErrors();
 	const { fetchRecommendedShardCount } = requireUtil();
@@ -104351,7 +104507,7 @@ function requireFormatters () {
 	  TimestampStyles,
 	  underscore,
 	  userMention,
-	} = requireDist$4();
+	} = requireDist$3();
 
 	/**
 	 * Formats an application command name and id into an application command mention.
@@ -104753,8 +104909,8 @@ function requireEmbedBuilder () {
 	if (hasRequiredEmbedBuilder) return EmbedBuilder_1;
 	hasRequiredEmbedBuilder = 1;
 
-	const { EmbedBuilder: BuildersEmbed, embedLength } = requireDist$3();
-	const { isJSONEncodable } = requireDist$9();
+	const { EmbedBuilder: BuildersEmbed, embedLength } = requireDist$2();
+	const { isJSONEncodable } = requireDist$8();
 	const { toSnakeCase } = requireTransformers();
 	const { resolveColor } = requireUtil();
 
@@ -104993,8 +105149,8 @@ function requireModalBuilder () {
 	if (hasRequiredModalBuilder) return ModalBuilder_1;
 	hasRequiredModalBuilder = 1;
 
-	const { ModalBuilder: BuildersModal, ComponentBuilder } = requireDist$3();
-	const { isJSONEncodable } = requireDist$9();
+	const { ModalBuilder: BuildersModal, ComponentBuilder } = requireDist$2();
+	const { isJSONEncodable } = requireDist$8();
 	const { toSnakeCase } = requireTransformers();
 
 	/**
@@ -105139,8 +105295,8 @@ function requireStringSelectMenuOptionBuilder () {
 	if (hasRequiredStringSelectMenuOptionBuilder) return StringSelectMenuOptionBuilder_1;
 	hasRequiredStringSelectMenuOptionBuilder = 1;
 
-	const { SelectMenuOptionBuilder: BuildersSelectMenuOption } = requireDist$3();
-	const { isJSONEncodable } = requireDist$9();
+	const { SelectMenuOptionBuilder: BuildersSelectMenuOption } = requireDist$2();
+	const { isJSONEncodable } = requireDist$8();
 	const { toSnakeCase } = requireTransformers();
 	const { resolvePartialEmoji } = requireUtil();
 
@@ -105230,7 +105386,7 @@ function requireSrc () {
 	hasRequiredSrc = 1;
 	(function (exports) {
 
-		const { polyfillDispose } = requireDist$9();
+		const { polyfillDispose } = requireDist$8();
 		const { __exportStar } = require$$1$1;
 
 		polyfillDispose();
@@ -105256,7 +105412,7 @@ function requireSrc () {
 		exports.BaseManager = requireBaseManager();
 		exports.BitField = requireBitField();
 		exports.ChannelFlagsBitField = requireChannelFlagsBitField();
-		exports.Collection = requireDist$5().Collection;
+		exports.Collection = requireDist$4().Collection;
 		exports.Constants = requireConstants$1();
 		exports.Colors = requireColors();
 		exports.Events = requireEvents();
@@ -105480,11 +105636,11 @@ function requireSrc () {
 
 		// External
 		__exportStar(requireV10(), exports);
+		__exportStar(requireDist$2(), exports);
 		__exportStar(requireDist$3(), exports);
-		__exportStar(requireDist$4(), exports);
 		__exportStar(requireWeb(), exports);
-		__exportStar(requireDist$9(), exports);
-		__exportStar(requireDist$1(), exports); 
+		__exportStar(requireDist$8(), exports);
+		__exportStar(requireDist(), exports); 
 	} (src));
 	return src;
 }
@@ -106155,38 +106311,40 @@ class Alias extends NodeBase {
             if (node.anchor === this.source)
                 found = node;
         }
+        if (found && ctx) {
+            const { anchors, doc, maxAliasCount } = ctx;
+            let data = anchors.get(found);
+            if (!data) {
+                // Resolve anchors for Node.prototype.toJS()
+                toJS(found, null, ctx);
+                data = anchors.get(found);
+            }
+            /* istanbul ignore if */
+            if (data?.res === undefined) {
+                const msg = 'This should not happen: Alias anchor was not resolved?';
+                throw new ReferenceError(msg);
+            }
+            if (maxAliasCount >= 0) {
+                data.count += 1;
+                if (data.aliasCount === 0)
+                    data.aliasCount = getAliasCount(doc, found, anchors);
+                if (data.count * data.aliasCount > maxAliasCount) {
+                    const msg = 'Excessive alias count indicates a resource exhaustion attack';
+                    throw new ReferenceError(msg);
+                }
+            }
+        }
         return found;
     }
     toJSON(_arg, ctx) {
         if (!ctx)
             return { source: this.source };
-        const { anchors, doc, maxAliasCount } = ctx;
-        const source = this.resolve(doc, ctx);
+        const source = this.resolve(ctx.doc, ctx);
         if (!source) {
             const msg = `Unresolved alias (the anchor must be set before the alias): ${this.source}`;
             throw new ReferenceError(msg);
         }
-        let data = anchors.get(source);
-        if (!data) {
-            // Resolve anchors for Node.prototype.toJS()
-            toJS(source, null, ctx);
-            data = anchors.get(source);
-        }
-        /* istanbul ignore if */
-        if (data?.res === undefined) {
-            const msg = 'This should not happen: Alias anchor was not resolved?';
-            throw new ReferenceError(msg);
-        }
-        if (maxAliasCount >= 0) {
-            data.count += 1;
-            if (data.aliasCount === 0)
-                data.aliasCount = getAliasCount(doc, source, anchors);
-            if (data.count * data.aliasCount > maxAliasCount) {
-                const msg = 'Excessive alias count indicates a resource exhaustion attack';
-                throw new ReferenceError(msg);
-            }
-        }
-        return data.res;
+        return ctx.anchors.get(source).res;
     }
     toString(ctx, _onComment, _onChompKeep) {
         const src = `*${this.source}`;
@@ -110033,46 +110191,47 @@ function plainValue(source, onError) {
     }
     if (badChar)
         onError(0, 'BAD_SCALAR_START', `Plain value cannot start with ${badChar}`);
-    return foldLines(source);
+    return unfoldLines(source);
 }
 function singleQuotedValue(source, onError) {
     if (source[source.length - 1] !== "'" || source.length === 1)
         onError(source.length, 'MISSING_CHAR', "Missing closing 'quote");
-    return foldLines(source.slice(1, -1)).replace(/''/g, "'");
+    return unfoldLines(source.slice(1, -1)).replace(/''/g, "'");
 }
-function foldLines(source) {
-    /**
-     * The negative lookbehind here and in the `re` RegExp is to
-     * prevent causing a polynomial search time in certain cases.
-     *
-     * The try-catch is for Safari, which doesn't support this yet:
-     * https://caniuse.com/js-regexp-lookbehind
-     */
-    let first, line;
-    try {
-        first = new RegExp('(.*?)(?<![ \t])[ \t]*\r?\n', 'sy');
-        line = new RegExp('[ \t]*(.*?)(?:(?<![ \t])[ \t]*)?\r?\n', 'sy');
-    }
-    catch {
-        first = /(.*?)[ \t]*\r?\n/sy;
-        line = /[ \t]*(.*?)[ \t]*\r?\n/sy;
-    }
-    let match = first.exec(source);
+function unfoldLines(source) {
+    const line = /(.*?)\r?\n/sy;
+    let match = line.exec(source);
     if (!match)
         return source;
-    let res = match[1];
+    /**
+     * The negative lookbehinds in these RegExps are to
+     * prevent causing a polynomial search time in certain cases.
+     *
+     * The try-catch is for Safari < 16.4 and other old browsers:
+     * https://caniuse.com/js-regexp-lookbehind
+     */
+    let trimEnd, trimBoth;
+    try {
+        trimEnd = new RegExp('(?<![ \t])[ \t]+$');
+        trimBoth = new RegExp('^[ \t]+|(?<![ \t])[ \t]+$', 'g');
+    }
+    catch {
+        trimEnd = /[ \t]+$/;
+        trimBoth = /^[ \t]+|[ \t]+$/g;
+    }
+    let res = match[1].replace(trimEnd, '');
     let sep = ' ';
-    let pos = first.lastIndex;
-    line.lastIndex = pos;
+    let pos = line.lastIndex;
     while ((match = line.exec(source))) {
-        if (match[1] === '') {
+        const lm = match[1].replace(trimBoth, '');
+        if (lm === '') {
             if (sep === '\n')
                 res += sep;
             else
                 sep = '\n';
         }
         else {
-            res += sep + match[1];
+            res += sep + lm;
             sep = ' ';
         }
         pos = line.lastIndex;
@@ -112895,7 +113054,7 @@ function parseDocument(source, options = {}) {
     }
     return doc;
 }
-function parse$1(src, reviver, options) {
+function parse$2(src, reviver, options) {
     let _reviver = undefined;
     if (typeof reviver === 'function') {
         _reviver = reviver;
@@ -112964,7 +113123,7 @@ var YAML = /*#__PURE__*/Object.freeze({
     isPair: isPair,
     isScalar: isScalar$1,
     isSeq: isSeq,
-    parse: parse$1,
+    parse: parse$2,
     parseAllDocuments: parseAllDocuments,
     parseDocument: parseDocument,
     stringify: stringify,
@@ -114302,7 +114461,7 @@ function expand(template, context) {
 }
 
 // pkg/dist-src/parse.js
-function parse(options) {
+function parse$1(options) {
   let method = options.method.toUpperCase();
   let url = (options.url || "/").replace(/:([a-z]\w+)/g, "{$1}");
   let headers = Object.assign({}, options.headers);
@@ -114368,7 +114527,7 @@ function parse(options) {
 
 // pkg/dist-src/endpoint-with-defaults.js
 function endpointWithDefaults(defaults, route, options) {
-  return parse(merge(defaults, route, options));
+  return parse$1(merge(defaults, route, options));
 }
 
 // pkg/dist-src/with-defaults.js
@@ -114379,193 +114538,137 @@ function withDefaults$2(oldDefaults, newDefaults) {
     DEFAULTS: DEFAULTS2,
     defaults: withDefaults$2.bind(null, DEFAULTS2),
     merge: merge.bind(null, DEFAULTS2),
-    parse
+    parse: parse$1
   });
 }
 
 // pkg/dist-src/index.js
 var endpoint = withDefaults$2(null, DEFAULTS);
 
-var dist = {};
-
-var hasRequiredDist;
-
-function requireDist () {
-	if (hasRequiredDist) return dist;
-	hasRequiredDist = 1;
-	/*!
-	 * content-type
-	 * Copyright(c) 2015 Douglas Christopher Wilson
-	 * MIT Licensed
-	 */
-	Object.defineProperty(dist, "__esModule", { value: true });
-	dist.format = format;
-	dist.parse = parse;
-	const TEXT_REGEXP = /^[\u0009\u0020-\u007e\u0080-\u00ff]*$/;
-	const TOKEN_REGEXP = /^[!#$%&'*+.^_`|~0-9A-Za-z-]+$/;
-	/**
-	 * RegExp to match chars that must be quoted-pair in RFC 9110 sec 5.6.4
-	 */
-	const QUOTE_REGEXP = /[\\"]/g;
-	/**
-	 * RegExp to match type in RFC 9110 sec 8.3.1
-	 *
-	 * media-type = type "/" subtype
-	 * type       = token
-	 * subtype    = token
-	 */
-	const TYPE_REGEXP = /^[!#$%&'*+.^_`|~0-9A-Za-z-]+\/[!#$%&'*+.^_`|~0-9A-Za-z-]+$/;
-	/**
-	 * Null object perf optimization. Faster than `Object.create(null)` and `{ __proto__: null }`.
-	 */
-	const NullObject = /* @__PURE__ */ (() => {
-	    const C = function () { };
-	    C.prototype = Object.create(null);
-	    return C;
-	})();
-	/**
-	 * Format an object into a `Content-Type` header.
-	 */
-	function format(obj) {
-	    const { type, parameters } = obj;
-	    if (!type || !TYPE_REGEXP.test(type)) {
-	        throw new TypeError(`Invalid type: ${type}`);
-	    }
-	    let result = type;
-	    if (parameters) {
-	        for (const param of Object.keys(parameters)) {
-	            if (!TOKEN_REGEXP.test(param)) {
-	                throw new TypeError(`Invalid parameter name: ${param}`);
-	            }
-	            result += `; ${param}=${qstring(parameters[param])}`;
-	        }
-	    }
-	    return result;
-	}
-	/**
-	 * Parse a `Content-Type` header.
-	 */
-	function parse(header, options) {
-	    const len = header.length;
-	    let index = skipOWS(header, 0, len);
-	    const valueStart = index;
-	    index = skipValue(header, index, len);
-	    const valueEnd = trailingOWS(header, valueStart, index);
-	    const type = header.slice(valueStart, valueEnd).toLowerCase();
-	    const parameters = options?.parameters === false
-	        ? new NullObject()
-	        : parseParameters(header, index, len);
-	    return { type, parameters };
-	}
-	const SP = 32; // " "
-	const HTAB = 9; // "\t"
-	const SEMI = 59; // ";"
-	const EQ = 61; // "="
-	const DQUOTE = 34; // '"'
-	const BSLASH = 92; // "\\"
-	/**
-	 * Parses the parameters of a `Content-Type` header starting at the given index.
-	 */
-	function parseParameters(header, index, len) {
-	    const parameters = new NullObject();
-	    parameter: while (index < len) {
-	        index = skipOWS(header, index + 1 /* Skip over ; */, len);
-	        const keyStart = index;
-	        while (index < len) {
-	            const code = header.charCodeAt(index);
-	            if (code === SEMI)
-	                continue parameter;
-	            if (code === EQ) {
-	                const keyEnd = trailingOWS(header, keyStart, index);
-	                const key = header.slice(keyStart, keyEnd).toLowerCase();
-	                index = skipOWS(header, index + 1, len);
-	                if (index < len && header.charCodeAt(index) === DQUOTE) {
-	                    index++;
-	                    let value = "";
-	                    while (index < len) {
-	                        const code = header.charCodeAt(index++);
-	                        if (code === DQUOTE) {
-	                            index = skipValue(header, index, len);
-	                            if (parameters[key] === undefined)
-	                                parameters[key] = value;
-	                            break;
-	                        }
-	                        if (code === BSLASH && index < len) {
-	                            value += header[index++];
-	                            continue;
-	                        }
-	                        value += String.fromCharCode(code);
-	                    }
-	                    continue parameter;
-	                }
-	                const valueStart = index;
-	                index = skipValue(header, index, len);
-	                if (parameters[key] === undefined) {
-	                    const valueEnd = trailingOWS(header, valueStart, index);
-	                    parameters[key] = header.slice(valueStart, valueEnd);
-	                }
-	                continue parameter;
-	            }
-	            index++;
-	        }
-	    }
-	    return parameters;
-	}
-	/**
-	 * Skip over characters until a semicolon.
-	 */
-	function skipValue(str, index, len) {
-	    while (index < len) {
-	        const char = str.charCodeAt(index);
-	        if (char === SEMI)
-	            break;
-	        index++;
-	    }
-	    return index;
-	}
-	/**
-	 * Skip optional whitespace (OWS) in an HTTP header value.
-	 *
-	 * OWS is defined in RFC 9110 sec 5.6.3 as SP (" ") or HTAB ("\t").
-	 */
-	function skipOWS(header, index, len) {
-	    while (index < len) {
-	        const char = header.charCodeAt(index);
-	        if (char !== SP && char !== HTAB)
-	            break;
-	        index++;
-	    }
-	    return index;
-	}
-	/**
-	 * Trim optional whitespace (OWS) from the end of a substring.
-	 *
-	 * OWS is defined in RFC 9110 sec 5.6.3 as SP (" ") or HTAB ("\t").
-	 */
-	function trailingOWS(header, start, end) {
-	    while (end > start) {
-	        const char = header.charCodeAt(end - 1);
-	        if (char !== SP && char !== HTAB)
-	            break;
-	        end--;
-	    }
-	    return end;
-	}
-	/**
-	 * Serialize a parameter value.
-	 */
-	function qstring(str) {
-	    if (TOKEN_REGEXP.test(str))
-	        return str;
-	    if (TEXT_REGEXP.test(str))
-	        return `"${str.replace(QUOTE_REGEXP, "\\$&")}"`;
-	    throw new TypeError(`Invalid parameter value: ${str}`);
-	}
-	
-	return dist;
+/*!
+ * content-type
+ * Copyright(c) 2015 Douglas Christopher Wilson
+ * MIT Licensed
+ */
+/**
+ * Null object perf optimization. Faster than `Object.create(null)` and `{ __proto__: null }`.
+ */
+const NullObject = /* @__PURE__ */ (() => {
+    const C = function () { };
+    C.prototype = Object.create(null);
+    return C;
+})();
+/**
+ * Parse a `Content-Type` header.
+ */
+function parse(header, options) {
+    const stopChar = 65_536; // Sentinel for "no stop char".
+    const len = header.length;
+    let index = skipOWS(header, 0, len);
+    const valueStart = index;
+    index = skipValue(header, index, len, stopChar);
+    const valueEnd = trailingOWS(header, valueStart, index);
+    const type = header.slice(valueStart, valueEnd).toLowerCase();
+    return parseParameters(header, type, index, len, stopChar);
 }
-
-var distExports = requireDist();
+const SP = 32; // " "
+const HTAB = 9; // "\t"
+const SEMI = 59; // ";"
+const EQ = 61; // "="
+const DQUOTE = 34; // '"'
+const BSLASH = 92; // "\\"
+/**
+ * Parses the parameters of a `Content-Type` header starting at the given index.
+ */
+function parseParameters(header, type, index, len, stopChar) {
+    const parameters = new NullObject();
+    parameter: while (index < len) {
+        if (header.charCodeAt(index) === stopChar)
+            break;
+        index = skipOWS(header, index + 1 /* Skip over ; */, len);
+        const keyStart = index;
+        while (index < len) {
+            const code = header.charCodeAt(index);
+            if (code === stopChar)
+                break parameter;
+            if (code === SEMI)
+                continue parameter;
+            if (code === EQ) {
+                const keyEnd = trailingOWS(header, keyStart, index);
+                const key = header.slice(keyStart, keyEnd).toLowerCase();
+                index = skipOWS(header, index + 1, len);
+                if (index < len && header.charCodeAt(index) === DQUOTE) {
+                    index++;
+                    let value = "";
+                    while (index < len) {
+                        const code = header.charCodeAt(index++);
+                        if (code === DQUOTE) {
+                            index = skipValue(header, index, len, stopChar);
+                            if (parameters[key] === undefined)
+                                parameters[key] = value;
+                            break;
+                        }
+                        if (code === BSLASH && index < len) {
+                            value += header[index++];
+                            continue;
+                        }
+                        value += String.fromCharCode(code);
+                    }
+                    continue parameter;
+                }
+                const valueStart = index;
+                index = skipValue(header, index, len, stopChar);
+                if (parameters[key] === undefined) {
+                    const valueEnd = trailingOWS(header, valueStart, index);
+                    parameters[key] = header.slice(valueStart, valueEnd);
+                }
+                continue parameter;
+            }
+            index++;
+        }
+    }
+    return { type, index, parameters };
+}
+/**
+ * Skip over characters until a semicolon or other exit character.
+ */
+function skipValue(str, index, len, stopChar) {
+    while (index < len) {
+        const code = str.charCodeAt(index);
+        if (code === SEMI || code === stopChar)
+            break;
+        index++;
+    }
+    return index;
+}
+/**
+ * Skip optional whitespace (OWS) in an HTTP header value.
+ *
+ * OWS is defined in RFC 9110 sec 5.6.3 as SP (" ") or HTAB ("\t").
+ */
+function skipOWS(header, index, len) {
+    while (index < len) {
+        const char = header.charCodeAt(index);
+        if (char !== SP && char !== HTAB)
+            break;
+        index++;
+    }
+    return index;
+}
+/**
+ * Trim optional whitespace (OWS) from the end of a substring.
+ *
+ * OWS is defined in RFC 9110 sec 5.6.3 as SP (" ") or HTAB ("\t").
+ */
+function trailingOWS(header, start, end) {
+    while (end > start) {
+        const char = header.charCodeAt(end - 1);
+        if (char !== SP && char !== HTAB)
+            break;
+        end--;
+    }
+    return end;
+}
 
 const intRegex = /^-?\d+$/;
 const noiseValue = /^-?\d+n+$/; // Noise - strings that match the custom format before being converted to it
@@ -114995,7 +115098,7 @@ const JSONParseV2 = (text, reviver) => {
 const MAX_INT = Number.MAX_SAFE_INTEGER.toString();
 const MAX_DIGITS = MAX_INT.length;
 const stringsOrLargeNumbers =
-  /"(?:\\.|[^"])*"|-?(0|[1-9][0-9]*)(\.[0-9]+)?([eE][+-]?[0-9]+)?/g;
+  /"(?:[^"\\]|\\.)*"|-?(0|[1-9][0-9]*)(\.[0-9]+)?([eE][+-]?[0-9]+)?/g;
 const noiseValueWithQuotes = /^"-?\d+n+"$/; // Noise - strings that match the custom format before being converted to it
 
 /**
@@ -115174,7 +115277,7 @@ class RequestError extends Error {
 // pkg/dist-src/index.js
 
 // pkg/dist-src/version.js
-var VERSION$4 = "10.0.13";
+var VERSION$4 = "10.0.16";
 
 // pkg/dist-src/defaults.js
 var defaults_default = {
@@ -115296,7 +115399,7 @@ async function getResponseData(response) {
   if (!contentType) {
     return response.text().catch(noop$1);
   }
-  const mimetype = distExports.parse(contentType);
+  const mimetype = parse(contentType);
   if (isJSONResponse(mimetype)) {
     let text = "";
     try {
@@ -115539,7 +115642,7 @@ var createTokenAuth = function createTokenAuth2(token) {
   });
 };
 
-const VERSION$2 = "7.0.7";
+const VERSION$2 = "7.0.8";
 
 const noop = () => {
 };
