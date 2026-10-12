@@ -22,7 +22,7 @@
     ".": "./dist/index.js"
   },
   "engines": {
-    "node": ">=20"
+    "node": ">=24"
   },
   "scripts": {
     "test": "cross-env NODE_OPTIONS=--experimental-vm-modules NODE_NO_WARNINGS=1 npx jest",
