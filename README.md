@@ -366,3 +366,11 @@ component types often need a bot and will not work on plain webhooks.
               url: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
 
 ```
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup, branch/release notes, and PR expectations.
+
+## License
+
+This project is licensed under the [MIT License](LICENSE).

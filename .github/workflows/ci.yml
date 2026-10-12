@@ -9,6 +9,7 @@ on:
       - main
       - v2
       - "feat-*"
+      - "*/*"
     paths:
       - .github/workflows/ci.yml
       - __fixtures__/**
@@ -29,7 +30,7 @@ on:
       - v2
 
 env:
-  BADGES_BRANCH: 'badges'
+  BADGES_BRANCH: "badges"
   REF_NAME: ${{ github.ref_name }}
   REF_TYPE: ${{ github.ref_type }}
   BRANCH_NAME: ${{ ( github.ref_type == 'branch' && github.ref_name ) || '' }}
@@ -45,14 +46,14 @@ jobs:
     steps:
       - name: Checkout
         id: checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - run: echo "build_status_message=FAIL" >> $GITHUB_ENV
       - run: echo "build_status_color=9e1010" >> $GITHUB_ENV
 
       - name: Setup Node.js
         id: setup-node
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v7
         with:
           node-version-file: .node-version
           cache: npm
@@ -85,13 +86,12 @@ jobs:
         run: npx badge 'CI Status (${{ env.BRANCH_NAME }})' '${{ env.build_status_message }}' '#${{ env.build_status_color }}' grey @plastic > badges/status_${{ env.BRANCH_NAME }}.svg
 
       - name: Github Pages Deploy
-        uses: peaceiris/actions-gh-pages@v4.0.0
+        uses: peaceiris/actions-gh-pages@v4.1.0
         if: always()
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_dir: ./badges
           keep_files: true
-
 
   test-execution-of-src:
     name: src Smoke Test
@@ -100,7 +100,7 @@ jobs:
     steps:
       - name: Checkout
         id: checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Test Action
         id: test-action
