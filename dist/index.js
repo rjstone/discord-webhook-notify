@@ -118397,6 +118397,10 @@ async function getDefaultDescription() {
  */
 
 
+// Fixed extra wait so timer and clock rounding (~1ms) can't end the wait
+// just short of the minimum interval when the last run was very recent.
+const waitPaddingMs = 10;
+
 /**
  * Ensure some number of ms has passed since our last run, which should also be
  * the last time a Discord API request was sent. We use the modification time
@@ -118431,7 +118435,8 @@ async function ensureDurationSinceLastRun(minIntervalSinceLastRunMs) {
     if (sinceLastRunMs < 0) {
       sinceLastRunMs = 0;
     } // just in case
-    const waitTimeMs = minIntervalSinceLastRunMs - sinceLastRunMs * 0.9;
+    const waitTimeMs =
+      minIntervalSinceLastRunMs - sinceLastRunMs * 0.9 + waitPaddingMs;
     info(
       "Calling Discord Webhook API too frequently. Waiting: " +
         waitTimeMs.toFixed(0) +
