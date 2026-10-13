@@ -59,6 +59,6 @@
     "npm": "^12.2.0",
     "prettier": "^3.9.9",
     "prettier-eslint": "^17.1.2",
-    "rollup": "^4.63.6"
+    "rollup": "^4.64.3"
   }
 }
